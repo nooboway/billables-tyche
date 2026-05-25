@@ -1,0 +1,180 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  password_hash String
+  created_at    DateTime  @default(now())
+  businesses    Business[]
+}
+
+model Business {
+  id             String    @id @default(cuid())
+  user_id        String
+  user           User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  name           String
+  logo_url       String?
+  signature_url  String?
+  address_street String?
+  address_city   String?
+  tax_reg_no     String?
+  phone          String?
+  email          String?
+  website        String?
+  language       String    @default("en")
+  currency_code  String    @default("NGN")
+  created_at     DateTime  @default(now())
+
+  clients         Client[]
+  documents       Document[]
+  products        ProductService[]
+  expenses        Expense[]
+  settings        BusinessSettings?
+
+  @@index([user_id])
+}
+
+model BusinessSettings {
+  id                   String   @id @default(cuid())
+  business_id          String   @unique
+  business             Business @relation(fields: [business_id], references: [id], onDelete: Cascade)
+  template_name        String   @default("default")
+  template_color       String   @default("#0066FF")
+  payment_method       String?
+  due_days             Int      @default(30)
+  tax_rates            Json     @default("[{\"label\":\"VAT\",\"rate\":750},{\"label\":\"WHT\",\"rate\":500}]")
+  subscription_ends_at DateTime
+  created_at           DateTime @default(now())
+  updated_at           DateTime @updatedAt
+}
+
+model Client {
+  id             String    @id @default(cuid())
+  business_id    String
+  business       Business  @relation(fields: [business_id], references: [id], onDelete: Cascade)
+  name           String
+  email          String?
+  phone          String?
+  address_street String?
+  address_city   String?
+  tax_reg_no     String?
+  created_at     DateTime  @default(now())
+  updated_at     DateTime  @updatedAt
+
+  documents Document[]
+
+  @@index([business_id])
+  @@index([name])
+}
+
+enum DocumentType {
+  INVOICE
+  ESTIMATE
+  PROFORMA
+  DELIVERY_NOTE
+  PURCHASE_ORDER
+}
+
+enum DocumentStatus {
+  DRAFT
+  SENT
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+model Document {
+  id              String         @id @default(cuid())
+  business_id     String
+  business        Business       @relation(fields: [business_id], references: [id], onDelete: Cascade)
+  client_id       String?
+  client          Client?        @relation(fields: [client_id], references: [id], onDelete: SetNull)
+  type            DocumentType   @default(INVOICE)
+  status          DocumentStatus @default(DRAFT)
+  document_number String
+  reference       String?
+  issue_date      DateTime       @default(now())
+  due_date        DateTime?
+  notes           String?
+  payment_method  String?
+  discount_pct    Int            @default(0)
+  discount_amount Int            @default(0)
+  tax_pct         Int            @default(750)
+  subtotal        Int            @default(0)
+  tax_amount      Int            @default(0)
+  total           Int            @default(0)
+  sent_at         DateTime?
+  paid_at         DateTime?
+  created_at      DateTime       @default(now())
+  updated_at      DateTime       @updatedAt
+
+  items DocumentItem[]
+
+  @@unique([business_id, document_number])
+  @@index([business_id])
+  @@index([client_id])
+  @@index([status])
+  @@index([type])
+}
+
+model DocumentItem {
+  id                 String   @id @default(cuid())
+  document_id        String
+  document           Document @relation(fields: [document_id], references: [id], onDelete: Cascade)
+  product_service_id String?
+  product_service    ProductService? @relation(fields: [product_service_id], references: [id], onDelete: SetNull)
+  description        String
+  quantity           Int
+  unit_price         Int
+  tax_pct            Int      @default(0)
+  line_total         Int
+  sort_order         Int      @default(0)
+
+  @@index([document_id])
+}
+
+model ProductService {
+  id          String   @id @default(cuid())
+  business_id String
+  business    Business @relation(fields: [business_id], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  unit_price  Int
+  unit        String?
+  tax_pct     Int      @default(750)
+  sku         String?
+  photo_url   String?
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  document_items DocumentItem[]
+
+  @@index([business_id])
+}
+
+model Expense {
+  id          String   @id @default(cuid())
+  business_id String
+  business    Business @relation(fields: [business_id], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  amount      Int
+  category    String
+  date        DateTime
+  paid        Boolean  @default(true)
+  photo_url   String?
+  tax_pct     Int      @default(0)
+  currency    String   @default("NGN")
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  @@index([business_id])
+  @@index([category])
+}

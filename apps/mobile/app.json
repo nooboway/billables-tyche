@@ -1,0 +1,38 @@
+{
+  "expo": {
+    "name": "Billables",
+    "slug": "billables",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0a0a0a"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.billables.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0a0a0a"
+      },
+      "package": "com.billables.app"
+    },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Billables to attach receipt photos.",
+          "cameraPermission": "Allow Billables to capture receipt photos."
+        }
+      ]
+    ],
+    "extra": {
+      "apiUrl": "https://billables-api.vercel.app/api/v1"
+    }
+  }
+}
