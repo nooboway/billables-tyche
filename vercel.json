@@ -1,5 +1,6 @@
 {
   "version": 2,
+  "buildCommand": "npm install --prefix apps/backend && npx prisma generate --schema=apps/backend/prisma/schema.prisma",
   "rewrites": [
     { "source": "/(.*)", "destination": "/api/index" }
   ]

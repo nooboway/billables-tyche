@@ -1,9 +1,9 @@
-import puppeteer from "puppeteer";
+import puppeteer, { Browser } from "puppeteer";
 import { centsToDisplay } from "../services/calculation.service";
 
-let browserInstance: puppeteer.Browser | null = null;
+let browserInstance: Browser | null = null;
 
-async function getBrowser(): Promise<puppeteer.Browser> {
+async function getBrowser(): Promise<Browser> {
   if (!browserInstance || !browserInstance.connected) {
     browserInstance = await puppeteer.launch({
       headless: true,

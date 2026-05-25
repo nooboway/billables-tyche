@@ -1,5 +1,7 @@
 import { Request, Response } from "express";
-import { DocumentStatus, DocumentType } from "@prisma/client";
+
+type DocumentStatus = "DRAFT" | "SENT" | "PAID" | "OVERDUE" | "CANCELLED";
+type DocumentType = "INVOICE" | "ESTIMATE" | "PROFORMA" | "DELIVERY_NOTE" | "PURCHASE_ORDER";
 import { prisma } from "../prisma";
 import { calculateDocumentTotals } from "../services/calculation.service";
 import { generateDocumentPdf } from "../templates/document.template";
