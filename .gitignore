@@ -12,3 +12,4 @@ apps/mobile/android/
 apps/backend/generated/
 
 .vercel
+.workspace/

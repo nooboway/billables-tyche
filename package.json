@@ -9,6 +9,8 @@
   "scripts": {
     "dev:backend": "npm run dev --workspace=apps/backend",
     "build:backend": "npm run build --workspace=apps/backend",
+    "dev:replit": "npm run --prefix replit-export-v2 dev",
+    "build:replit": "npm run --prefix replit-export-v2 build",
     "postinstall": "npx prisma generate --schema=apps/backend/prisma/schema.prisma"
   }
 }
