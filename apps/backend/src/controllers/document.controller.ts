@@ -1,182 +1,304 @@
 import { Request, Response } from "express";
+import { supabaseAdmin } from "../supabase";
 
-type DocumentStatus = "DRAFT" | "SENT" | "PAID" | "OVERDUE" | "CANCELLED";
-type DocumentType = "INVOICE" | "ESTIMATE" | "PROFORMA" | "DELIVERY_NOTE" | "PURCHASE_ORDER";
-import { prisma } from "../prisma";
-import { calculateDocumentTotals } from "../services/calculation.service";
-import { generateDocumentPdf } from "../templates/document.template";
+/**
+ * Document controller — maps to the Supabase `invoices` + `invoice_items` tables.
+ *
+ * Status mapping (Prisma enum → Supabase enum):
+ *   DRAFT → draft, SENT → sent, PAID → paid, OVERDUE → overdue, CANCELLED → void
+ *
+ * The PDF generation feature is temporarily disabled since it required Puppeteer
+ * which isn't available in serverless environments.
+ */
 
-const DOC_PREFIX: Record<DocumentType, string> = {
-  INVOICE: "INV",
-  ESTIMATE: "EST",
-  PROFORMA: "PRO",
-  DELIVERY_NOTE: "DEL",
-  PURCHASE_ORDER: "PO",
+const STATUS_MAP: Record<string, string> = {
+  DRAFT: "draft",
+  SENT: "sent",
+  PAID: "paid",
+  OVERDUE: "overdue",
+  CANCELLED: "void",
 };
 
-const ALLOWED_TRANSITIONS: Record<DocumentStatus, DocumentStatus[]> = {
-  DRAFT: ["SENT", "CANCELLED"],
-  SENT: ["PAID", "OVERDUE", "CANCELLED"],
-  OVERDUE: ["PAID", "CANCELLED"],
-  PAID: [],
-  CANCELLED: [],
+const REVERSE_STATUS: Record<string, string> = Object.fromEntries(
+  Object.entries(STATUS_MAP).map(([k, v]) => [v, k])
+);
+
+const ALLOWED_TRANSITIONS: Record<string, string[]> = {
+  draft: ["sent", "void"],
+  sent: ["paid", "overdue", "void"],
+  overdue: ["paid", "void"],
+  paid: [],
+  void: [],
 };
 
-async function nextDocumentNumber(businessId: string, type: DocumentType): Promise<string> {
-  const count = await prisma.document.count({ where: { business_id: businessId, type } });
-  const seq = String(count + 1).padStart(4, "0");
-  return `${DOC_PREFIX[type]}-${seq}`;
-}
-
-export async function listDocuments(req: Request, res: Response): Promise<void> {
+export async function listDocuments(
+  req: Request,
+  res: Response
+): Promise<void> {
   const { business_id, type, status } = req.query as Record<string, string>;
-  const documents = await prisma.document.findMany({
-    where: {
-      business_id,
-      ...(type ? { type: type as DocumentType } : {}),
-      ...(status ? { status: status as DocumentStatus } : {}),
-    },
-    orderBy: { created_at: "desc" },
-    include: { client: { select: { id: true, name: true } } },
-  });
-  res.json(documents);
+
+  let query = supabaseAdmin
+    .from("invoices")
+    .select("*, clients(id, name)")
+    .order("created_at", { ascending: false });
+
+  if (business_id) query = query.eq("business_id", business_id);
+  if (status) {
+    const mapped = STATUS_MAP[status] ?? status.toLowerCase();
+    query = query.eq("status", mapped);
+  }
+
+  const { data, error } = await query;
+  if (error) {
+    res.status(500).json({ error: error.message });
+    return;
+  }
+  res.json(data);
 }
 
-export async function getDocument(req: Request, res: Response): Promise<void> {
-  const doc = await prisma.document.findUniqueOrThrow({
-    where: { id: req.params.id },
-    include: {
-      client: true,
-      items: {
-        include: { product_service: { select: { id: true, name: true, sku: true, photo_url: true } } },
-        orderBy: { sort_order: "asc" },
-      },
-    },
-  });
-  res.json(doc);
+export async function getDocument(
+  req: Request,
+  res: Response
+): Promise<void> {
+  const { data: invoice, error } = await supabaseAdmin
+    .from("invoices")
+    .select(
+      "*, clients(*), invoice_items(*)"
+    )
+    .eq("id", req.params.id)
+    .single();
+
+  if (error) {
+    res.status(404).json({ error: "Document not found" });
+    return;
+  }
+  res.json(invoice);
 }
 
-export async function createDocument(req: Request, res: Response): Promise<void> {
-  const { business_id, type, client_id, reference, issue_date, due_date, notes,
-    payment_method, discount_pct = 0, tax_pct = 750, items = [] } = req.body;
+export async function createDocument(
+  req: Request,
+  res: Response
+): Promise<void> {
+  const {
+    business_id,
+    client_id,
+    matter_id,
+    issue_date,
+    due_date,
+    notes,
+    payment_terms,
+    tax = 0,
+    items = [],
+    status = "draft",
+  } = req.body;
 
-  const document_number = await nextDocumentNumber(business_id, type as DocumentType);
-  const totals = calculateDocumentTotals(items, discount_pct, tax_pct);
+  // Calculate totals
+  const subtotal = items.reduce(
+    (sum: number, it: any) => sum + (it.quantity ?? 1) * (it.rate ?? it.unit_price ?? 0),
+    0
+  );
+  const total = subtotal + (tax ?? 0);
 
-  const doc = await prisma.document.create({
-    data: {
-      business_id,
-      type,
-      client_id: client_id || null,
-      document_number,
-      reference: reference || null,
-      issue_date: issue_date ? new Date(issue_date) : new Date(),
-      due_date: due_date ? new Date(due_date) : null,
-      notes: notes || null,
-      payment_method: payment_method || null,
-      discount_pct,
-      tax_pct,
-      ...totals,
-      items: {
-        create: items.map((item: any, i: number) => ({
-          description: item.description,
-          quantity: item.quantity,
-          unit_price: item.unit_price,
-          tax_pct: item.tax_pct ?? 0,
-          line_total: item.quantity * item.unit_price,
-          product_service_id: item.product_service_id || null,
-          sort_order: i,
-        })),
-      },
-    },
-    include: { items: true, client: true },
-  });
-  res.status(201).json(doc);
-}
+  // Generate invoice number
+  const { data: numData, error: numErr } = await supabaseAdmin.rpc(
+    "next_invoice_number",
+    { _business_id: business_id }
+  );
 
-export async function updateDocument(req: Request, res: Response): Promise<void> {
-  const existing = await prisma.document.findUniqueOrThrow({ where: { id: req.params.id } });
-
-  if (existing.status !== "DRAFT") {
-    res.status(422).json({ error: "Only DRAFT documents can be edited" });
+  if (numErr) {
+    res.status(500).json({ error: numErr.message });
     return;
   }
 
-  const { items, discount_pct = existing.discount_pct, tax_pct = existing.tax_pct, ...fields } = req.body;
-  const totals = items ? calculateDocumentTotals(items, discount_pct, tax_pct) : undefined;
+  // Create the invoice
+  const { data: invoice, error: invErr } = await supabaseAdmin
+    .from("invoices")
+    .insert({
+      business_id,
+      client_id: client_id || null,
+      matter_id: matter_id || null,
+      number: numData as string,
+      issue_date: issue_date ?? new Date().toISOString().slice(0, 10),
+      due_date: due_date || null,
+      subtotal,
+      tax: tax ?? 0,
+      total,
+      notes: notes || null,
+      payment_terms: payment_terms || null,
+      status,
+    })
+    .select()
+    .single();
 
-  const doc = await prisma.document.update({
-    where: { id: req.params.id },
-    data: {
-      ...fields,
-      discount_pct,
-      tax_pct,
-      ...(totals ?? {}),
-      ...(items
-        ? {
-            items: {
-              deleteMany: {},
-              create: items.map((item: any, i: number) => ({
-                description: item.description,
-                quantity: item.quantity,
-                unit_price: item.unit_price,
-                tax_pct: item.tax_pct ?? 0,
-                line_total: item.quantity * item.unit_price,
-                product_service_id: item.product_service_id || null,
-                sort_order: i,
-              })),
-            },
-          }
-        : {}),
-    },
-    include: { items: true, client: true },
-  });
-  res.json(doc);
+  if (invErr) {
+    res.status(400).json({ error: invErr.message });
+    return;
+  }
+
+  // Create line items
+  if (items.length > 0) {
+    const lineItems = items.map((it: any, idx: number) => ({
+      invoice_id: invoice.id,
+      business_id,
+      kind: it.kind ?? "service",
+      description: it.description,
+      quantity: it.quantity ?? 1,
+      rate: it.rate ?? it.unit_price ?? 0,
+      amount: (it.quantity ?? 1) * (it.rate ?? it.unit_price ?? 0),
+      sort_order: idx,
+    }));
+
+    const { error: itemErr } = await supabaseAdmin
+      .from("invoice_items")
+      .insert(lineItems);
+
+    if (itemErr) {
+      res.status(400).json({ error: itemErr.message });
+      return;
+    }
+  }
+
+  // Return the full document
+  const { data: full } = await supabaseAdmin
+    .from("invoices")
+    .select("*, clients(*), invoice_items(*)")
+    .eq("id", invoice.id)
+    .single();
+
+  res.status(201).json(full);
 }
 
-export async function updateDocumentStatus(req: Request, res: Response): Promise<void> {
-  const { status } = req.body as { status: DocumentStatus };
-  const doc = await prisma.document.findUniqueOrThrow({ where: { id: req.params.id } });
+export async function updateDocument(
+  req: Request,
+  res: Response
+): Promise<void> {
+  // Only allow editing drafts
+  const { data: existing, error: findErr } = await supabaseAdmin
+    .from("invoices")
+    .select("status")
+    .eq("id", req.params.id)
+    .single();
 
-  if (!ALLOWED_TRANSITIONS[doc.status].includes(status)) {
+  if (findErr) {
+    res.status(404).json({ error: "Document not found" });
+    return;
+  }
+
+  if (existing.status !== "draft") {
+    res.status(422).json({ error: "Only draft documents can be edited" });
+    return;
+  }
+
+  const { items, ...fields } = req.body;
+
+  // Update the invoice fields
+  const { error: updErr } = await supabaseAdmin
+    .from("invoices")
+    .update(fields)
+    .eq("id", req.params.id);
+
+  if (updErr) {
+    res.status(400).json({ error: updErr.message });
+    return;
+  }
+
+  // Replace items if provided
+  if (items) {
+    await supabaseAdmin
+      .from("invoice_items")
+      .delete()
+      .eq("invoice_id", req.params.id);
+
+    if (items.length > 0) {
+      const business_id = fields.business_id ?? existing.business_id;
+      const lineItems = items.map((it: any, idx: number) => ({
+        invoice_id: req.params.id,
+        business_id,
+        kind: it.kind ?? "service",
+        description: it.description,
+        quantity: it.quantity ?? 1,
+        rate: it.rate ?? it.unit_price ?? 0,
+        amount: (it.quantity ?? 1) * (it.rate ?? it.unit_price ?? 0),
+        sort_order: idx,
+      }));
+
+      await supabaseAdmin.from("invoice_items").insert(lineItems);
+    }
+  }
+
+  const { data: full } = await supabaseAdmin
+    .from("invoices")
+    .select("*, clients(*), invoice_items(*)")
+    .eq("id", req.params.id)
+    .single();
+
+  res.json(full);
+}
+
+export async function updateDocumentStatus(
+  req: Request,
+  res: Response
+): Promise<void> {
+  const rawStatus = req.body.status as string;
+  const status = STATUS_MAP[rawStatus] ?? rawStatus.toLowerCase();
+
+  const { data: doc, error: findErr } = await supabaseAdmin
+    .from("invoices")
+    .select("status")
+    .eq("id", req.params.id)
+    .single();
+
+  if (findErr) {
+    res.status(404).json({ error: "Document not found" });
+    return;
+  }
+
+  const allowed = ALLOWED_TRANSITIONS[doc.status] ?? [];
+  if (!allowed.includes(status)) {
     res.status(422).json({
       error: `Cannot transition from ${doc.status} to ${status}`,
-      allowed: ALLOWED_TRANSITIONS[doc.status],
+      allowed,
     });
     return;
   }
 
-  const updated = await prisma.document.update({
-    where: { id: req.params.id },
-    data: {
-      status,
-      ...(status === "SENT" ? { sent_at: new Date() } : {}),
-      ...(status === "PAID" ? { paid_at: new Date() } : {}),
-    },
-  });
-  res.json(updated);
+  const { data, error } = await supabaseAdmin
+    .from("invoices")
+    .update({ status })
+    .eq("id", req.params.id)
+    .select()
+    .single();
+
+  if (error) {
+    res.status(400).json({ error: error.message });
+    return;
+  }
+  res.json(data);
 }
 
-export async function deleteDocument(req: Request, res: Response): Promise<void> {
-  await prisma.document.delete({ where: { id: req.params.id } });
+export async function deleteDocument(
+  req: Request,
+  res: Response
+): Promise<void> {
+  const { error } = await supabaseAdmin
+    .from("invoices")
+    .delete()
+    .eq("id", req.params.id);
+
+  if (error) {
+    res.status(400).json({ error: error.message });
+    return;
+  }
   res.status(204).send();
 }
 
-export async function getDocumentPdf(req: Request, res: Response): Promise<void> {
-  const doc = await prisma.document.findUniqueOrThrow({
-    where: { id: req.params.id },
-    include: {
-      client: true,
-      business: true,
-      items: {
-        include: { product_service: true },
-        orderBy: { sort_order: "asc" },
-      },
-    },
+export async function getDocumentPdf(
+  req: Request,
+  res: Response
+): Promise<void> {
+  // PDF generation is temporarily disabled in the Supabase migration.
+  // Puppeteer is not available in serverless (Vercel) environments.
+  res.status(501).json({
+    error: "PDF generation is not yet available in this deployment",
   });
-
-  const buffer = await generateDocumentPdf(doc as any);
-  res.setHeader("Content-Type", "application/pdf");
-  res.setHeader("Content-Disposition", `attachment; filename="${doc.document_number}.pdf"`);
-  res.send(buffer);
 }

@@ -11,7 +11,6 @@
     "build:backend": "npm run build --workspace=apps/backend",
     "dev:replit": "npm run --prefix replit-export-v2 dev",
     "build:replit": "npm run --prefix replit-export-v2 build",
-    "build": "npm run build:replit && node build-backend-vercel.js",
-    "postinstall": "npx prisma generate --schema=apps/backend/prisma/schema.prisma"
+    "build": "npm run build:replit && node build-backend-vercel.js"
   }
 }

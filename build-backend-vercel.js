@@ -65,28 +65,14 @@ fs.writeFileSync(
   JSON.stringify(vcConfig, null, 2)
 );
 
-// 5. Bundle Express API with esbuild
+// 5. Bundle Express API with esbuild (no Prisma externals needed)
 console.log('Bundling backend code...');
 execSync(
-  'npx esbuild apps/backend/src/index.ts --bundle --platform=node --target=node20 --outfile=.vercel/output/functions/api.func/index.js --external:@prisma/client --external:puppeteer',
+  'npx esbuild apps/backend/src/index.ts --bundle --platform=node --target=node20 --outfile=.vercel/output/functions/api.func/index.js',
   { stdio: 'inherit' }
 );
 
-// 6. Copy Prisma client node_modules to the API function node_modules
-console.log('Copying Prisma client to API node_modules...');
-const rootNodeModules = path.join(rootDir, 'node_modules');
-const apiNodeModules = path.join(apiFuncDir, 'node_modules');
-
-copyDir(
-  path.join(rootNodeModules, '@prisma'),
-  path.join(apiNodeModules, '@prisma')
-);
-copyDir(
-  path.join(rootNodeModules, '.prisma'),
-  path.join(apiNodeModules, '.prisma')
-);
-
-// 7. Update .vercel/output/config.json to route /api/* to the api function
+// 6. Update .vercel/output/config.json to route /api/* to the api function
 console.log('Updating Vercel config.json routing...');
 const configPath = path.join(vercelOutputDir, 'config.json');
 if (fs.existsSync(configPath)) {

@@ -1,6 +1,7 @@
 import "dotenv/config";
 import express from "express";
 import cors from "cors";
+import { requireAuth } from "./middleware/auth.middleware";
 import authRoutes from "./routes/auth.routes";
 import documentRoutes from "./routes/document.routes";
 import clientRoutes from "./routes/client.routes";
@@ -38,7 +39,7 @@ app.get("/", (_req, res) => {
 <body>
   <div class="card">
     <h1>Billables</h1>
-    <div class="status"><span class="dot"></span> API is running</div>
+    <div class="status"><span class="dot"></span> API is running (Supabase)</div>
     <h2>Endpoints</h2>
     <ul class="routes">
       <li><span class="method">POST</span><span class="path">/api/v1/auth/register</span></li>
@@ -55,11 +56,15 @@ app.get("/", (_req, res) => {
 });
 
 app.get("/api/v1/health", (_req, res) => res.json({ status: "ok" }));
+
+// Public routes
 app.use("/api/v1/auth", authRoutes);
-app.use("/api/v1/documents", documentRoutes);
-app.use("/api/v1/clients", clientRoutes);
-app.use("/api/v1/products", productRoutes);
-app.use("/api/v1/expenses", expenseRoutes);
+
+// Protected routes — require a valid Supabase access token
+app.use("/api/v1/documents", requireAuth, documentRoutes);
+app.use("/api/v1/clients", requireAuth, clientRoutes);
+app.use("/api/v1/products", requireAuth, productRoutes);
+app.use("/api/v1/expenses", requireAuth, expenseRoutes);
 
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error(err);

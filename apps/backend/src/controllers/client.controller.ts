@@ -1,47 +1,86 @@
 import { Request, Response } from "express";
-import { prisma } from "../prisma";
+import { supabaseAdmin } from "../supabase";
 
 export async function listClients(req: Request, res: Response): Promise<void> {
   const { business_id, q } = req.query as Record<string, string>;
-  const clients = await prisma.client.findMany({
-    where: {
-      business_id,
-      ...(q ? { name: { contains: q, mode: "insensitive" } } : {}),
-    },
-    orderBy: { name: "asc" },
-    include: { _count: { select: { documents: true } } },
-  });
-  res.json(clients);
+
+  let query = supabaseAdmin
+    .from("clients")
+    .select("*")
+    .order("name", { ascending: true });
+
+  if (business_id) query = query.eq("business_id", business_id);
+  if (q) query = query.ilike("name", `%${q}%`);
+
+  const { data, error } = await query;
+  if (error) {
+    res.status(500).json({ error: error.message });
+    return;
+  }
+  res.json(data);
 }
 
 export async function getClient(req: Request, res: Response): Promise<void> {
-  const client = await prisma.client.findUniqueOrThrow({
-    where: { id: req.params.id },
-    include: {
-      documents: {
-        orderBy: { created_at: "desc" },
-        take: 20,
-        select: {
-          id: true, document_number: true, type: true,
-          status: true, total: true, created_at: true,
-        },
-      },
-    },
-  });
-  res.json(client);
+  const { data, error } = await supabaseAdmin
+    .from("clients")
+    .select("*")
+    .eq("id", req.params.id)
+    .single();
+
+  if (error) {
+    res.status(404).json({ error: "Client not found" });
+    return;
+  }
+  res.json(data);
 }
 
-export async function createClient(req: Request, res: Response): Promise<void> {
-  const client = await prisma.client.create({ data: req.body });
-  res.status(201).json(client);
+export async function createClient(
+  req: Request,
+  res: Response
+): Promise<void> {
+  const { data, error } = await supabaseAdmin
+    .from("clients")
+    .insert(req.body)
+    .select()
+    .single();
+
+  if (error) {
+    res.status(400).json({ error: error.message });
+    return;
+  }
+  res.status(201).json(data);
 }
 
-export async function updateClient(req: Request, res: Response): Promise<void> {
-  const client = await prisma.client.update({ where: { id: req.params.id }, data: req.body });
-  res.json(client);
+export async function updateClient(
+  req: Request,
+  res: Response
+): Promise<void> {
+  const { data, error } = await supabaseAdmin
+    .from("clients")
+    .update(req.body)
+    .eq("id", req.params.id)
+    .select()
+    .single();
+
+  if (error) {
+    res.status(400).json({ error: error.message });
+    return;
+  }
+  res.json(data);
 }
 
-export async function deleteClient(req: Request, res: Response): Promise<void> {
-  await prisma.client.delete({ where: { id: req.params.id } });
+export async function deleteClient(
+  req: Request,
+  res: Response
+): Promise<void> {
+  const { error } = await supabaseAdmin
+    .from("clients")
+    .delete()
+    .eq("id", req.params.id);
+
+  if (error) {
+    res.status(400).json({ error: error.message });
+    return;
+  }
   res.status(204).send();
 }
