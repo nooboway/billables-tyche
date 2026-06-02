@@ -1,10 +1,11 @@
-import puppeteer, { Browser } from "puppeteer";
+import type { Browser } from "puppeteer";
 import { centsToDisplay } from "../services/calculation.service";
 
 let browserInstance: Browser | null = null;
 
 async function getBrowser(): Promise<Browser> {
   if (!browserInstance || !browserInstance.connected) {
+    const puppeteer = (await import("puppeteer")).default;
     browserInstance = await puppeteer.launch({
       headless: true,
       args: ["--no-sandbox", "--disable-setuid-sandbox"],
