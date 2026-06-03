@@ -1,6 +1,10 @@
 import { Request, Response } from "express";
 import { supabaseAdmin } from "../supabase";
 
+function isValidEmail(e: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
+}
+
 /**
  * Register a new user via Supabase Auth.
  * The `handle_new_user` database trigger automatically creates
@@ -16,6 +20,22 @@ export async function register(req: Request, res: Response): Promise<void> {
 
   if (!email || !password) {
     res.status(400).json({ error: "email and password are required" });
+    return;
+  }
+  if (!isValidEmail(email)) {
+    res.status(400).json({ error: "Invalid email address" });
+    return;
+  }
+  if (password.length < 8) {
+    res.status(400).json({ error: "Password must be at least 8 characters" });
+    return;
+  }
+  if (typeof businessName === "string" && businessName.length > 200) {
+    res.status(400).json({ error: "businessName too long" });
+    return;
+  }
+  if (typeof fullName === "string" && fullName.length > 200) {
+    res.status(400).json({ error: "fullName too long" });
     return;
   }
 
@@ -35,12 +55,10 @@ export async function register(req: Request, res: Response): Promise<void> {
     return;
   }
 
-  // Sign in immediately to get a session token
   const { data: session, error: signInErr } =
     await supabaseAdmin.auth.signInWithPassword({ email, password });
 
   if (signInErr || !session.session) {
-    // User was created but auto-sign-in failed — still return success
     res.status(201).json({
       user: { id: data.user.id, email: data.user.email },
       message: "Account created. Please log in.",
@@ -48,7 +66,6 @@ export async function register(req: Request, res: Response): Promise<void> {
     return;
   }
 
-  // Resolve the business that was auto-created by the trigger
   const { data: membership } = await supabaseAdmin
     .from("business_members")
     .select("business_id")
@@ -84,6 +101,14 @@ export async function login(req: Request, res: Response): Promise<void> {
     res.status(400).json({ error: "email and password are required" });
     return;
   }
+  if (!isValidEmail(email)) {
+    res.status(400).json({ error: "Invalid email address" });
+    return;
+  }
+  if (typeof password !== "string" || password.length > 1000) {
+    res.status(400).json({ error: "Invalid password" });
+    return;
+  }
 
   const { data, error } = await supabaseAdmin.auth.signInWithPassword({
     email,
@@ -97,7 +122,6 @@ export async function login(req: Request, res: Response): Promise<void> {
 
   const userId = data.user.id;
 
-  // Resolve the user's business
   const { data: membership } = await supabaseAdmin
     .from("business_members")
     .select("business_id")
