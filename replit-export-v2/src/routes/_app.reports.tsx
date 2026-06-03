@@ -3,6 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Download, FileText } from "lucide-react";
+import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
 import { AppTopbar } from "@/components/app/app-topbar";
 import { Button } from "@/components/ui/button";
 import { useBusiness } from "@/lib/business";
@@ -26,6 +27,13 @@ const tabs: { id: Tab; label: string; help: string }[] = [
 
 function fmt(n: number, c = "USD") {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: c }).format(Number(n) || 0);
+}
+function fmtCompact(n: number, c = "USD") {
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: c, notation: "compact", maximumFractionDigits: 1 }).format(Number(n) || 0);
+}
+function monthLabel(m: string) {
+  const [y, mo] = m.split("-");
+  return new Date(Number(y), Number(mo) - 1, 1).toLocaleString("en-US", { month: "short", year: "2-digit" });
 }
 
 function ReportsPage() {
@@ -109,16 +117,16 @@ function ReportsPage() {
       <AppTopbar title="Reports" />
       <div className="p-8 max-w-7xl mx-auto space-y-6">
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <KPI label="WIP" value={fmt(data?.totals.wip ?? 0, cur)} active={tab === "wip"} onClick={() => setTab("wip")} />
-          <KPI label="Outstanding" value={fmt(data?.totals.outstanding ?? 0, cur)} active={tab === "outstanding"} onClick={() => setTab("outstanding")} />
-          <KPI label="Overdue" value={fmt(data?.totals.overdue ?? 0, cur)} active={tab === "overdue"} onClick={() => setTab("overdue")} tone="destructive" />
-          <KPI label="Collected (all-time)" value={fmt(data?.totals.collected ?? 0, cur)} active={tab === "collections"} onClick={() => setTab("collections")} />
+          <KPI label="WIP (unbilled)" value={fmtCompact(data?.totals.wip ?? 0, cur)} active={tab === "wip"} onClick={() => setTab("wip")} />
+          <KPI label="Outstanding A/R" value={fmtCompact(data?.totals.outstanding ?? 0, cur)} active={tab === "outstanding"} onClick={() => setTab("outstanding")} />
+          <KPI label="Overdue" value={fmtCompact(data?.totals.overdue ?? 0, cur)} active={tab === "overdue"} onClick={() => setTab("overdue")} tone="destructive" />
+          <KPI label="Collected (YTD)" value={fmtCompact(data?.totals.collected ?? 0, cur)} active={tab === "collections"} onClick={() => setTab("collections")} />
         </div>
 
         {/* Aging */}
         {data && (
           <div className="bg-card ring-1 ring-border rounded-xl p-5">
-            <h3 className="text-sm font-medium mb-3">A/R Aging</h3>
+            <h3 className="font-display text-sm font-semibold mb-3">A/R Aging</h3>
             <div className="grid grid-cols-5 gap-3 text-xs">
               <Aging label="Current" v={fmt(data.aging.current, cur)} />
               <Aging label="1–30" v={fmt(data.aging.d1_30, cur)} />
@@ -170,14 +178,35 @@ function ReportsPage() {
             </Table>
           )}
           {tab === "collections" && (
-            <Table headers={["Month", "Collected"]}>
-              {(data?.collections ?? []).map((r) => (
-                <tr key={r.month} className="hover:bg-surface/50">
-                  <Td>{r.month}</Td><Td num strong>{fmt(r.total, cur)}</Td>
-                </tr>
-              ))}
-              {(data?.collections ?? []).length === 0 && <Empty cols={2} label="No collections yet." />}
-            </Table>
+            <>
+              {(data?.collections ?? []).length > 0 && (
+                <div className="p-5 border-b border-border">
+                  <ResponsiveContainer width="100%" height={240}>
+                    <AreaChart data={data!.collections} margin={{ top: 8, right: 12, left: 8, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="collGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="var(--primary)" stopOpacity={0.35} />
+                          <stop offset="100%" stopColor="var(--primary)" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                      <XAxis dataKey="month" tickFormatter={monthLabel} tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} axisLine={false} tickLine={false} />
+                      <YAxis tickFormatter={(v) => fmtCompact(Number(v), cur)} tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} axisLine={false} tickLine={false} width={70} />
+                      <Tooltip formatter={(v: number) => fmt(Number(v), cur)} labelFormatter={monthLabel} contentStyle={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 }} />
+                      <Area type="monotone" dataKey="total" name="Collected" stroke="var(--primary)" strokeWidth={2} fill="url(#collGrad)" />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+              <Table headers={["Month", "Collected"]}>
+                {(data?.collections ?? []).map((r) => (
+                  <tr key={r.month} className="hover:bg-surface/50">
+                    <Td>{r.month}</Td><Td num strong>{fmt(r.total, cur)}</Td>
+                  </tr>
+                ))}
+                {(data?.collections ?? []).length === 0 && <Empty cols={2} label="No collections yet." />}
+              </Table>
+            </>
           )}
         </div>
       </div>
@@ -187,9 +216,9 @@ function ReportsPage() {
 
 function KPI({ label, value, active, onClick, tone }: { label: string; value: string; active?: boolean; onClick: () => void; tone?: "destructive" }) {
   return (
-    <button onClick={onClick} className={cn("text-left bg-card ring-1 rounded-xl p-5 hover:bg-surface transition", active ? "ring-primary" : "ring-border")}>
-      <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-widest">{label}</p>
-      <h3 className={cn("text-2xl font-semibold mt-3", tone === "destructive" && "text-destructive")}>{value}</h3>
+    <button onClick={onClick} className={cn("text-left bg-card ring-1 rounded-xl p-[18px] hover:bg-surface transition", active ? "ring-[1.5px] ring-primary" : "ring-border")}>
+      <p className="text-[10.5px] text-muted-foreground font-semibold uppercase tracking-[0.12em]">{label}</p>
+      <h3 className={cn("font-display text-[26px] leading-none font-semibold mt-3 tabular-nums truncate", tone === "destructive" && "text-destructive")}>{value}</h3>
     </button>
   );
 }

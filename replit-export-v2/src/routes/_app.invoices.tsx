@@ -1,8 +1,8 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Download, Plus, Search, FileText, Trash2 } from "lucide-react";
+import { Download, Plus, Search, FileText, Trash2, List, LayoutGrid } from "lucide-react";
 import { AppTopbar } from "@/components/app/app-topbar";
 import { StatusPill } from "@/components/app/status-pill";
 import { useBusiness } from "@/lib/business";
@@ -26,7 +26,7 @@ export const Route = createFileRoute("/_app/invoices")({
 type Invoice = InvoiceLike & { id: string };
 type TE = { id: string; entry_date: string; minutes: number; rate: number; description: string | null; matter_id: string; matters?: { name: string; client_id: string } | null };
 
-const filters = ["All", "draft", "sent", "paid", "overdue"] as const;
+const filters = ["All", "draft", "sent", "overdue", "paid"] as const;
 
 function statusLabel(s: string): "Paid" | "Pending" | "Overdue" | "Draft" {
   if (s === "paid") return "Paid";
@@ -48,6 +48,12 @@ function InvoicesPage() {
   const [filter, setFilter] = useState<(typeof filters)[number]>("All");
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
+  const [layout, setLayout] = useState<"table" | "cards">("cards");
+  useEffect(() => {
+    const s = typeof window !== "undefined" ? localStorage.getItem("billables.invoices.layout") : null;
+    if (s === "table" || s === "cards") setLayout(s);
+  }, []);
+  const setLayoutPersist = (l: "table" | "cards") => { setLayout(l); if (typeof window !== "undefined") localStorage.setItem("billables.invoices.layout", l); };
   const today = new Date().toISOString().slice(0, 10);
   const dueDefault = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
   const [form, setForm] = useState<{ client_id: string; matter_id: string; issue_date: string; due_date: string; tax: string; notes: string; selectedTE: Set<string>; manual: { description: string; quantity: string; rate: string }[] }>({
@@ -144,6 +150,13 @@ function InvoicesPage() {
 
   const clientMatters = matters.filter((m) => m.client_id === form.client_id);
 
+  // Live total for the create dialog (selected time + manual lines + tax)
+  const dialogTotal = useMemo(() => {
+    const timeSum = filteredTE.filter((t) => form.selectedTE.has(t.id)).reduce((s, t) => s + (t.minutes / 60) * Number(t.rate), 0);
+    const manualSum = form.manual.reduce((s, m) => s + (Number(m.quantity) || 0) * (Number(m.rate) || 0), 0);
+    return timeSum + manualSum + (Number(form.tax) || 0);
+  }, [filteredTE, form.selectedTE, form.manual, form.tax]);
+
   return (
     <>
       <AppTopbar title="Invoices" />
@@ -158,44 +171,74 @@ function InvoicesPage() {
             <Search className="size-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search…" className="w-full h-9 pl-9 pr-3 rounded-lg ring-1 ring-border bg-card text-sm focus:ring-primary outline-none" />
           </div>
+          <div className="flex items-center rounded-lg ring-1 ring-border p-0.5 bg-card">
+            <button onClick={() => setLayoutPersist("table")} className={cn("size-7 grid place-items-center rounded-md", layout === "table" ? "bg-surface text-foreground ring-1 ring-border" : "text-muted-foreground")} aria-label="Table view"><List className="size-3.5" /></button>
+            <button onClick={() => setLayoutPersist("cards")} className={cn("size-7 grid place-items-center rounded-md", layout === "cards" ? "bg-surface text-foreground ring-1 ring-border" : "text-muted-foreground")} aria-label="Cards view"><LayoutGrid className="size-3.5" /></button>
+          </div>
           <Button onClick={() => setOpen(true)} disabled={clients.length === 0} className="gap-1.5"><Plus className="size-4" />New invoice</Button>
         </div>
 
-        <div className="bg-card ring-1 ring-border rounded-xl overflow-hidden">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-surface border-b border-border">
-              <tr><Th>Invoice</Th><Th>Client</Th><Th className="hidden md:table-cell">Matter</Th><Th>Issued</Th><Th>Due</Th><Th className="text-right">Amount</Th><Th>Status</Th><Th /></tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {visible.map((inv) => (
-                <tr key={inv.id} className="hover:bg-surface/50 group">
-                  <td className="px-5 py-4 font-mono text-xs">{inv.number}</td>
-                  <td className="px-5 py-4">{inv.clients?.name ?? "—"}</td>
-                  <td className="px-5 py-4 text-muted-foreground hidden md:table-cell">{inv.matters?.name ?? "—"}</td>
-                  <td className="px-5 py-4 text-muted-foreground text-xs">{inv.issue_date}</td>
-                  <td className="px-5 py-4 text-muted-foreground text-xs">{inv.due_date ?? "—"}</td>
-                  <td className="px-5 py-4 text-right font-medium tabular-nums">{fmt(Number(inv.total))}</td>
-                  <td className="px-5 py-4"><StatusPill status={statusLabel(inv.status)} /></td>
-                  <td className="px-5 py-4 text-right whitespace-nowrap">
-                    <div className="inline-flex items-center gap-1">
-                      <button onClick={() => downloadInvoicePdf(inv, current!)} title="Download PDF" className="inline-flex items-center gap-1 text-xs font-medium px-2 h-7 rounded-md ring-1 ring-border bg-card hover:bg-surface"><Download className="size-3.5" />PDF</button>
-                      {inv.status !== "paid" && <button onClick={() => markPaid.mutate(inv.id)} className="text-xs font-medium px-2 h-7 rounded-md ring-1 ring-border bg-card hover:bg-surface" title="Mark paid">Paid</button>}
-                      <button onClick={() => remove.mutate(inv.id)} className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive p-1"><Trash2 className="size-3.5" /></button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {visible.length === 0 && (
-                <tr><td colSpan={8} className="px-5 py-12 text-center text-sm text-muted-foreground"><FileText className="size-6 mx-auto mb-2 opacity-50" />No invoices.</td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+        {visible.length === 0 ? (
+          <div className="bg-card ring-1 ring-border rounded-xl px-5 py-16 text-center text-sm text-muted-foreground"><FileText className="size-7 mx-auto mb-3 opacity-50" />No invoices.</div>
+        ) : layout === "table" ? (
+          <div className="bg-card ring-1 ring-border rounded-xl overflow-hidden">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-surface border-b border-border">
+                <tr><Th>Invoice</Th><Th>Client</Th><Th className="hidden md:table-cell">Matter</Th><Th>Issued</Th><Th>Due</Th><Th className="text-right">Amount</Th><Th>Status</Th><Th /></tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {visible.map((inv) => (
+                  <tr key={inv.id} className="hover:bg-surface/50 group">
+                    <td className="px-5 py-[13px] font-mono text-xs">{inv.number}</td>
+                    <td className="px-5 py-[13px]">{inv.clients?.name ?? "—"}</td>
+                    <td className="px-5 py-[13px] text-muted-foreground hidden md:table-cell">{inv.matters?.name ?? "—"}</td>
+                    <td className="px-5 py-[13px] text-muted-foreground text-xs font-mono">{inv.issue_date}</td>
+                    <td className="px-5 py-[13px] text-muted-foreground text-xs font-mono">{inv.due_date ?? "—"}</td>
+                    <td className="px-5 py-[13px] text-right font-medium tabular-nums">{fmt(Number(inv.total))}</td>
+                    <td className="px-5 py-[13px]"><StatusPill status={statusLabel(inv.status)} /></td>
+                    <td className="px-5 py-[13px] text-right whitespace-nowrap">
+                      <div className="inline-flex items-center gap-1">
+                        <button onClick={() => downloadInvoicePdf(inv, current!)} title="Download PDF" className="inline-flex items-center gap-1 text-xs font-medium px-2 h-7 rounded-md ring-1 ring-border bg-card hover:bg-surface"><Download className="size-3.5" />PDF</button>
+                        {inv.status !== "paid" && <button onClick={() => markPaid.mutate(inv.id)} className="text-xs font-medium px-2 h-7 rounded-md ring-1 ring-border bg-card hover:bg-surface" title="Mark paid">Paid</button>}
+                        <button onClick={() => remove.mutate(inv.id)} className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive p-1"><Trash2 className="size-3.5" /></button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="grid gap-[18px]" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))" }}>
+            {visible.map((inv) => (
+              <div key={inv.id} className="bg-card ring-1 ring-border rounded-xl p-5 space-y-4 hover:ring-primary/30 transition">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-mono text-xs">{inv.number}</span>
+                  <StatusPill status={statusLabel(inv.status)} />
+                </div>
+                <div className="text-sm">
+                  <div className="font-medium truncate">{inv.clients?.name ?? "—"}</div>
+                  <div className="text-muted-foreground text-xs truncate">{inv.matters?.name ?? "General"}</div>
+                </div>
+                <div className="border-t border-border pt-3 flex items-end justify-between">
+                  <div>
+                    <p className="text-[10.5px] uppercase tracking-[0.12em] text-muted-foreground">Due {inv.due_date ?? "—"}</p>
+                    <p className="font-display text-xl font-bold tabular-nums mt-0.5">{fmt(Number(inv.total))}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  {inv.status !== "paid" && <Button size="sm" variant="outline" className="flex-1 h-8" onClick={() => markPaid.mutate(inv.id)}>Mark paid</Button>}
+                  <Button size="sm" variant="outline" className="h-8 gap-1.5" onClick={() => downloadInvoicePdf(inv, current!)}><Download className="size-3.5" />PDF</Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-2xl">
-          <DialogHeader><DialogTitle>New invoice</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle className="font-display">New invoice</DialogTitle></DialogHeader>
           <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -256,9 +299,15 @@ function InvoicesPage() {
             </div>
             <div><Label>Notes</Label><Textarea rows={2} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></div>
           </div>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button disabled={!form.client_id || create.isPending} onClick={() => create.mutate()}>{create.isPending ? "Creating…" : "Create & send"}</Button>
+          <DialogFooter className="items-center sm:justify-between gap-3">
+            <div className="text-left">
+              <span className="text-[10.5px] uppercase tracking-[0.12em] text-muted-foreground">Total</span>
+              <span className="ml-2 font-display text-lg font-bold tabular-nums">{fmt(dialogTotal)}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
+              <Button disabled={!form.client_id || create.isPending} onClick={() => create.mutate()}>{create.isPending ? "Creating…" : "Create & send"}</Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>
