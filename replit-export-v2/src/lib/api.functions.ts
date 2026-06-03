@@ -414,12 +414,63 @@ export const getDashboardStats = createServerFn({ method: "GET" })
     const overdueCount = inv.filter((i) => i.status === "overdue").length;
     const unbilledTime = (time ?? []).filter((t) => t.billable && !t.invoice_id)
       .reduce((s, t) => s + (Number(t.minutes) / 60) * Number(t.rate), 0);
+
+    // ---- ARR (annualised run-rate of real billings) ----
+    // Aggregate every non-draft, non-void invoice billed in the trailing 12 months,
+    // then annualise by the actual span of billing activity to get a true run-rate.
+    const now = new Date();
+    const cutoff = new Date(now); cutoff.setFullYear(now.getFullYear() - 1);
+    const billed = inv.filter((i) => i.status !== "draft" && i.status !== "void" && i.issue_date && new Date(i.issue_date) >= cutoff);
+    const billedTotal = billed.reduce((s, i) => s + Number(i.total), 0);
+    const months = new Set(billed.map((i) => i.issue_date.slice(0, 7)));
+    const activeMonths = Math.max(1, months.size);
+    const mrr = billedTotal / activeMonths;          // monthly recurring run-rate
+    const arr = Math.round(mrr * 12);                // annual recurring run-rate
+
+    // ---- Invoice status breakdown (for pie chart) ----
+    const statusAgg: Record<string, { count: number; amount: number }> = {};
+    for (const i of inv) {
+      const k = i.status;
+      statusAgg[k] = statusAgg[k] ?? { count: 0, amount: 0 };
+      statusAgg[k].count += 1;
+      statusAgg[k].amount += Number(i.total);
+    }
+    const statusBreakdown = Object.entries(statusAgg).map(([status, v]) => ({ status, count: v.count, amount: v.amount }));
+
+    // ---- Monthly billings (for bar chart) ----
+    const monthlyAgg = new Map<string, { billed: number; collected: number }>();
+    for (const i of inv) {
+      if (i.status === "draft" || i.status === "void" || !i.issue_date) continue;
+      const k = i.issue_date.slice(0, 7);
+      const cur = monthlyAgg.get(k) ?? { billed: 0, collected: 0 };
+      cur.billed += Number(i.total);
+      if (i.status === "paid") cur.collected += Number(i.total);
+      monthlyAgg.set(k, cur);
+    }
+    const monthly = Array.from(monthlyAgg.entries())
+      .map(([month, v]) => ({ month, billed: v.billed, collected: v.collected }))
+      .sort((a, b) => a.month.localeCompare(b.month));
+
+    // ---- Revenue by client (for pie chart) ----
+    const clientAgg = new Map<string, number>();
+    for (const i of inv) {
+      if (i.status !== "paid") continue;
+      const name = (i.clients as { name?: string } | null)?.name ?? "—";
+      clientAgg.set(name, (clientAgg.get(name) ?? 0) + Number(i.total));
+    }
+    const revenueByClient = Array.from(clientAgg.entries())
+      .map(([client, amount]) => ({ client, amount }))
+      .sort((a, b) => b.amount - a.amount);
+
     return {
-      revenue, outstanding, overdueCount,
+      revenue, outstanding, overdueCount, arr, mrr,
       clientCount: clients?.length ?? 0,
       openMatters: (matters ?? []).filter((m) => m.status === "open").length,
       unbilledTime,
       recentInvoices: inv.slice(0, 5),
+      statusBreakdown,
+      monthly,
+      revenueByClient,
     };
   });
 
@@ -661,10 +712,12 @@ export const getReports = createServerFn({ method: "GET" })
   });
 
 // ============== DEMO SEED (no auth) ==============
-// Idempotent: ensures a sample managing-partner account + realistic data.
-const DEMO_EMAIL = "partner@demo-firm.law";
-const DEMO_PASSWORD = "DemoPartner2026!";
-const DEMO_FIRM = "Whitestone & Vega LLP";
+// Idempotent: the demo "Managing Partner" account is Tyche Solicitors.
+// The account + realistic data already exist; this returns its credentials,
+// and only seeds fallback sample data if the firm is somehow empty.
+const DEMO_EMAIL = "justice@tychelaw.com";
+const DEMO_PASSWORD = "0123456789";
+const DEMO_FIRM = "Tyche Solicitors";
 
 export const seedDemoAccount = createServerFn({ method: "POST" })
   .handler(async () => {
@@ -676,7 +729,7 @@ export const seedDemoAccount = createServerFn({ method: "POST" })
         email: DEMO_EMAIL,
         password: DEMO_PASSWORD,
         email_confirm: true,
-        user_metadata: { full_name: "Adaora Whitestone", firm_name: DEMO_FIRM },
+        user_metadata: { full_name: "Chief Olúmidé Adégoké, SAN", firm_name: DEMO_FIRM },
       });
       if (error) throw new Error(error.message);
       user = created.user;

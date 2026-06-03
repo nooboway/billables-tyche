@@ -1,9 +1,14 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { FileText, AlertCircle, Clock, Wallet, Plus, Briefcase, UserPlus, Users } from "lucide-react";
+import { FileText, AlertCircle, Clock, Wallet, Plus, Briefcase, UserPlus, Users, TrendingUp } from "lucide-react";
+import {
+  ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid,
+  PieChart, Pie, Cell, Legend,
+} from "recharts";
 import { AppTopbar } from "@/components/app/app-topbar";
 import { StatusPill } from "@/components/app/status-pill";
+import { Button } from "@/components/ui/button";
 import { useBusiness } from "@/lib/business";
 import { getDashboardStats } from "@/lib/api.functions";
 
@@ -20,9 +25,21 @@ export const Route = createFileRoute("/_app/dashboard")({
 function fmt(n: number, cur = "USD") {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: cur }).format(n || 0);
 }
+function fmtCompact(n: number, cur = "USD") {
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: cur, notation: "compact", maximumFractionDigits: 1 }).format(n || 0);
+}
+function monthLabel(m: string) {
+  const [y, mo] = m.split("-");
+  return new Date(Number(y), Number(mo) - 1, 1).toLocaleString("en-US", { month: "short", year: "2-digit" });
+}
+
+const STATUS_COLORS: Record<string, string> = {
+  paid: "#22c55e", sent: "#0066FF", overdue: "#ef4444", draft: "#94a3b8", void: "#64748b",
+};
+const PIE_COLORS = ["#0066FF", "#22c55e", "#c9a84c", "#ef4444", "#8b5cf6", "#06b6d4", "#f59e0b"];
 
 function DashboardPage() {
-  const { current } = useBusiness();
+  const { current, loading, error, refetch } = useBusiness();
   const fn = useServerFn(getDashboardStats);
   const { data, isLoading } = useQuery({
     queryKey: ["dashboard", current?.id],
@@ -30,8 +47,44 @@ function DashboardPage() {
     enabled: !!current?.id,
   });
 
-  if (!current) return <><AppTopbar title="Dashboard" /><div className="p-8 text-sm text-muted-foreground">Loading workspace…</div></>;
+  // ---- Workspace load states (no more infinite "Loading workspace…") ----
+  if (loading) {
+    return <><AppTopbar title="Dashboard" /><div className="p-8 text-sm text-muted-foreground">Loading workspace…</div></>;
+  }
+  if (error) {
+    return (
+      <>
+        <AppTopbar title="Dashboard" />
+        <div className="p-8 max-w-md mx-auto text-center space-y-4">
+          <AlertCircle className="size-8 mx-auto text-destructive" />
+          <div>
+            <h2 className="text-base font-medium">Couldn't load your workspace</h2>
+            <p className="text-sm text-muted-foreground mt-1">{error.message || "Please check your connection and try again."}</p>
+          </div>
+          <Button onClick={() => refetch()}>Retry</Button>
+        </div>
+      </>
+    );
+  }
+  if (!current) {
+    return (
+      <>
+        <AppTopbar title="Dashboard" />
+        <div className="p-8 max-w-md mx-auto text-center space-y-4">
+          <Briefcase className="size-8 mx-auto text-muted-foreground" />
+          <div>
+            <h2 className="text-base font-medium">No workspace yet</h2>
+            <p className="text-sm text-muted-foreground mt-1">Your firm workspace hasn't been set up. Try signing out and back in.</p>
+          </div>
+        </div>
+      </>
+    );
+  }
+
   const cur = current.default_currency;
+  const statusData = (data?.statusBreakdown ?? []).filter((s) => s.amount > 0);
+  const clientData = (data?.revenueByClient ?? []).slice(0, 6);
+  const monthly = data?.monthly ?? [];
 
   return (
     <>
@@ -49,11 +102,45 @@ function DashboardPage() {
           <QA to="/clients" icon={UserPlus} label="Add client" />
         </section>
 
-        <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <section className="grid grid-cols-2 lg:grid-cols-5 gap-6">
+          <Kpi label="ARR (run-rate)" value={fmt(data?.arr ?? 0, cur)} icon={TrendingUp} loading={isLoading} tone="primary" />
           <Kpi label="Revenue (paid)" value={fmt(data?.revenue ?? 0, cur)} icon={Wallet} loading={isLoading} />
           <Kpi label="Outstanding" value={fmt(data?.outstanding ?? 0, cur)} icon={FileText} loading={isLoading} />
           <Kpi label="Overdue invoices" value={String(data?.overdueCount ?? 0)} icon={AlertCircle} loading={isLoading} tone="destructive" />
           <Kpi label="Unbilled time" value={fmt(data?.unbilledTime ?? 0, cur)} icon={Clock} loading={isLoading} />
+        </section>
+
+        {/* Charts */}
+        <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <ChartCard title="Billings by month" subtitle="Billed vs. collected">
+            {monthly.length === 0 ? <ChartEmpty /> : (
+              <ResponsiveContainer width="100%" height={260}>
+                <BarChart data={monthly} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                  <XAxis dataKey="month" tickFormatter={monthLabel} tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} axisLine={false} tickLine={false} />
+                  <YAxis tickFormatter={(v) => fmtCompact(Number(v), cur)} tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} axisLine={false} tickLine={false} width={70} />
+                  <Tooltip formatter={(v: number) => fmt(Number(v), cur)} labelFormatter={monthLabel} contentStyle={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 }} />
+                  <Legend wrapperStyle={{ fontSize: 12 }} />
+                  <Bar dataKey="billed" name="Billed" fill="#0066FF" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="collected" name="Collected" fill="#22c55e" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </ChartCard>
+
+          <ChartCard title="Revenue by client" subtitle="Paid invoices">
+            {clientData.length === 0 ? <ChartEmpty /> : (
+              <ResponsiveContainer width="100%" height={260}>
+                <PieChart>
+                  <Pie data={clientData} dataKey="amount" nameKey="client" cx="50%" cy="50%" outerRadius={90} innerRadius={45} paddingAngle={2}>
+                    {clientData.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
+                  </Pie>
+                  <Tooltip formatter={(v: number) => fmt(Number(v), cur)} contentStyle={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 }} />
+                  <Legend wrapperStyle={{ fontSize: 11 }} />
+                </PieChart>
+              </ResponsiveContainer>
+            )}
+          </ChartCard>
         </section>
 
         <section className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -92,6 +179,19 @@ function DashboardPage() {
           </div>
 
           <aside className="space-y-6">
+            <ChartCard title="Invoice status" subtitle="By value" compact>
+              {statusData.length === 0 ? <ChartEmpty /> : (
+                <ResponsiveContainer width="100%" height={200}>
+                  <PieChart>
+                    <Pie data={statusData} dataKey="amount" nameKey="status" cx="50%" cy="50%" outerRadius={70} innerRadius={35} paddingAngle={2}>
+                      {statusData.map((s) => <Cell key={s.status} fill={STATUS_COLORS[s.status] ?? "#94a3b8"} />)}
+                    </Pie>
+                    <Tooltip formatter={(v: number, n: string) => [fmt(Number(v), cur), String(n)]} contentStyle={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12, textTransform: "capitalize" }} />
+                    <Legend wrapperStyle={{ fontSize: 11, textTransform: "capitalize" }} />
+                  </PieChart>
+                </ResponsiveContainer>
+              )}
+            </ChartCard>
             <div className="bg-card ring-1 ring-border rounded-xl p-6 space-y-4">
               <h3 className="text-sm font-medium">Firm snapshot</h3>
               <Row label="Active clients"><Users className="size-3.5 text-muted-foreground" />{data?.clientCount ?? 0}</Row>
@@ -112,14 +212,30 @@ function statusLabel(s: string): "Paid" | "Pending" | "Overdue" | "Draft" {
   return "Draft";
 }
 
-function Kpi({ label, value, icon: Icon, loading, tone }: { label: string; value: string; icon: React.ComponentType<{ className?: string }>; loading?: boolean; tone?: "destructive" }) {
+function ChartCard({ title, subtitle, children, compact }: { title: string; subtitle?: string; children: React.ReactNode; compact?: boolean }) {
   return (
-    <div className="bg-card ring-1 ring-border rounded-xl p-5 space-y-4">
+    <div className={"bg-card ring-1 ring-border rounded-xl " + (compact ? "p-5" : "p-6")}>
+      <div className="mb-4">
+        <h3 className="text-sm font-medium">{title}</h3>
+        {subtitle && <p className="text-[11px] text-muted-foreground uppercase tracking-widest mt-0.5">{subtitle}</p>}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function ChartEmpty() {
+  return <div className="h-[200px] flex items-center justify-center text-sm text-muted-foreground">No data yet.</div>;
+}
+
+function Kpi({ label, value, icon: Icon, loading, tone }: { label: string; value: string; icon: React.ComponentType<{ className?: string }>; loading?: boolean; tone?: "destructive" | "primary" }) {
+  return (
+    <div className={"bg-card ring-1 rounded-xl p-5 space-y-4 " + (tone === "primary" ? "ring-primary/40" : "ring-border")}>
       <div className="flex items-start justify-between">
         <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-widest">{label}</p>
-        <Icon className="size-4 text-muted-foreground" />
+        <Icon className={"size-4 " + (tone === "primary" ? "text-primary" : "text-muted-foreground")} />
       </div>
-      <h3 className={"text-2xl font-semibold tracking-tight " + (tone === "destructive" ? "text-destructive" : "")}>
+      <h3 className={"text-2xl font-semibold tracking-tight " + (tone === "destructive" ? "text-destructive" : tone === "primary" ? "text-primary" : "")}>
         {loading ? "—" : value}
       </h3>
     </div>
