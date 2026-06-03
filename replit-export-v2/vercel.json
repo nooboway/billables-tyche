@@ -1,12 +1,4 @@
 {
   "version": 2,
-  "builds": [
-    {
-      "src": "dist/**",
-      "use": "@vercel/static"
-    }
-  ],
-  "rewrites": [
-    { "source": "/(.*)", "destination": "/dist/$1" }
-  ]
+  "comment": "TanStack Start (Nitro vercel preset) generates its own .vercel/output during build. The root build-backend-vercel.js merges this with the Express backend. Do not add rewrites here — they are ignored at build time."
 }
