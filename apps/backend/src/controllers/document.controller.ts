@@ -1,16 +1,6 @@
 import { Request, Response } from "express";
 import { supabaseAdmin } from "../supabase";
 
-/**
- * Document controller — maps to the Supabase `invoices` + `invoice_items` tables.
- *
- * Status mapping (Prisma enum → Supabase enum):
- *   DRAFT → draft, SENT → sent, PAID → paid, OVERDUE → overdue, CANCELLED → void
- *
- * The PDF generation feature is temporarily disabled since it required Puppeteer
- * which isn't available in serverless environments.
- */
-
 const STATUS_MAP: Record<string, string> = {
   DRAFT: "draft",
   SENT: "sent",
@@ -62,9 +52,7 @@ export async function getDocument(
 ): Promise<void> {
   const { data: invoice, error } = await supabaseAdmin
     .from("invoices")
-    .select(
-      "*, clients(*), invoice_items(*)"
-    )
+    .select("*, clients(*), invoice_items(*)")
     .eq("id", req.params.id)
     .single();
 
@@ -92,14 +80,12 @@ export async function createDocument(
     status = "draft",
   } = req.body;
 
-  // Calculate totals
   const subtotal = items.reduce(
     (sum: number, it: any) => sum + (it.quantity ?? 1) * (it.rate ?? it.unit_price ?? 0),
     0
   );
   const total = subtotal + (tax ?? 0);
 
-  // Generate invoice number
   const { data: numData, error: numErr } = await supabaseAdmin.rpc(
     "next_invoice_number",
     { _business_id: business_id }
@@ -110,7 +96,6 @@ export async function createDocument(
     return;
   }
 
-  // Create the invoice
   const { data: invoice, error: invErr } = await supabaseAdmin
     .from("invoices")
     .insert({
@@ -135,7 +120,6 @@ export async function createDocument(
     return;
   }
 
-  // Create line items
   if (items.length > 0) {
     const lineItems = items.map((it: any, idx: number) => ({
       invoice_id: invoice.id,
@@ -158,7 +142,6 @@ export async function createDocument(
     }
   }
 
-  // Return the full document
   const { data: full } = await supabaseAdmin
     .from("invoices")
     .select("*, clients(*), invoice_items(*)")
@@ -172,10 +155,10 @@ export async function updateDocument(
   req: Request,
   res: Response
 ): Promise<void> {
-  // Only allow editing drafts
+  // FIX: include business_id in the select so line-item replacement works correctly
   const { data: existing, error: findErr } = await supabaseAdmin
     .from("invoices")
-    .select("status")
+    .select("status, business_id")
     .eq("id", req.params.id)
     .single();
 
@@ -191,7 +174,6 @@ export async function updateDocument(
 
   const { items, ...fields } = req.body;
 
-  // Update the invoice fields
   const { error: updErr } = await supabaseAdmin
     .from("invoices")
     .update(fields)
@@ -202,7 +184,6 @@ export async function updateDocument(
     return;
   }
 
-  // Replace items if provided
   if (items) {
     await supabaseAdmin
       .from("invoice_items")
@@ -210,6 +191,7 @@ export async function updateDocument(
       .eq("invoice_id", req.params.id);
 
     if (items.length > 0) {
+      // Now correctly falls back to the fetched existing.business_id
       const business_id = fields.business_id ?? existing.business_id;
       const lineItems = items.map((it: any, idx: number) => ({
         invoice_id: req.params.id,
@@ -296,8 +278,6 @@ export async function getDocumentPdf(
   req: Request,
   res: Response
 ): Promise<void> {
-  // PDF generation is temporarily disabled in the Supabase migration.
-  // Puppeteer is not available in serverless (Vercel) environments.
   res.status(501).json({
     error: "PDF generation is not yet available in this deployment",
   });
