@@ -427,6 +427,19 @@ export const getDashboardStats = createServerFn({ method: "GET" })
     const mrr = billedTotal / activeMonths;          // monthly recurring run-rate
     const arr = Math.round(mrr * 12);                // annual recurring run-rate
 
+    // ARR delta: trailing 90 days billed vs the prior 90 days.
+    const d90 = new Date(now); d90.setDate(now.getDate() - 90);
+    const d180 = new Date(now); d180.setDate(now.getDate() - 180);
+    const sumBetween = (from: Date, to: Date) => inv
+      .filter((i) => i.status !== "draft" && i.status !== "void" && i.issue_date && new Date(i.issue_date) >= from && new Date(i.issue_date) < to)
+      .reduce((s, i) => s + Number(i.total), 0);
+    const recent90 = sumBetween(d90, now);
+    const prior90 = sumBetween(d180, d90);
+    const arrDeltaPct = prior90 > 0 ? Math.round(((recent90 - prior90) / prior90) * 1000) / 10 : null;
+
+    // Collection rate = collected / (collected + still-outstanding billed)
+    const collectionRate = revenue + outstanding > 0 ? Math.round((revenue / (revenue + outstanding)) * 100) : 0;
+
     // ---- Invoice status breakdown (for pie chart) ----
     const statusAgg: Record<string, { count: number; amount: number }> = {};
     for (const i of inv) {
@@ -463,7 +476,7 @@ export const getDashboardStats = createServerFn({ method: "GET" })
       .sort((a, b) => b.amount - a.amount);
 
     return {
-      revenue, outstanding, overdueCount, arr, mrr,
+      revenue, outstanding, overdueCount, arr, mrr, arrDeltaPct, collectionRate,
       clientCount: clients?.length ?? 0,
       openMatters: (matters ?? []).filter((m) => m.status === "open").length,
       unbilledTime,

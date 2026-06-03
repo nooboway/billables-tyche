@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { FileText, AlertCircle, Clock, Wallet, Plus, Briefcase, UserPlus, Users, TrendingUp } from "lucide-react";
+import { FileText, AlertCircle, Clock, Wallet, Plus, Briefcase, UserPlus, Users, TrendingUp, ArrowUp } from "lucide-react";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid,
   PieChart, Pie, Cell, Legend,
@@ -91,8 +91,8 @@ function DashboardPage() {
       <AppTopbar title="Dashboard" />
       <div className="p-8 max-w-7xl mx-auto space-y-8">
         <div>
-          <h2 className="text-2xl font-semibold tracking-tight">Welcome back to {current.name}</h2>
-          <p className="text-sm text-muted-foreground mt-1">Snapshot of your firm's billing and matters.</p>
+          <h2 className="font-display text-[23px] font-semibold tracking-tight">Welcome back to {current.name}</h2>
+          <p className="text-sm text-muted-foreground mt-1">A snapshot of your firm's billing, matters, and unbilled work.</p>
         </div>
 
         <section className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -103,10 +103,11 @@ function DashboardPage() {
         </section>
 
         <section className="grid grid-cols-2 lg:grid-cols-5 gap-6">
-          <Kpi label="ARR (run-rate)" value={fmt(data?.arr ?? 0, cur)} icon={TrendingUp} loading={isLoading} tone="primary" />
-          <Kpi label="Revenue (paid)" value={fmt(data?.revenue ?? 0, cur)} icon={Wallet} loading={isLoading} />
-          <Kpi label="Outstanding" value={fmt(data?.outstanding ?? 0, cur)} icon={FileText} loading={isLoading} />
-          <Kpi label="Overdue invoices" value={String(data?.overdueCount ?? 0)} icon={AlertCircle} loading={isLoading} tone="destructive" />
+          <Kpi label="ARR (run-rate)" value={fmt(data?.arr ?? 0, cur)} icon={TrendingUp} loading={isLoading} tone="primary"
+            delta={data?.arrDeltaPct != null ? `${data.arrDeltaPct > 0 ? "+" : ""}${data.arrDeltaPct}% vs prior 90d` : undefined} />
+          <Kpi label="Revenue (collected)" value={fmt(data?.revenue ?? 0, cur)} icon={Wallet} loading={isLoading} />
+          <Kpi label="Outstanding A/R" value={fmt(data?.outstanding ?? 0, cur)} icon={FileText} loading={isLoading} />
+          <Kpi label="Overdue" value={String(data?.overdueCount ?? 0)} icon={AlertCircle} loading={isLoading} tone="destructive" />
           <Kpi label="Unbilled time" value={fmt(data?.unbilledTime ?? 0, cur)} icon={Clock} loading={isLoading} />
         </section>
 
@@ -128,17 +129,23 @@ function DashboardPage() {
             )}
           </ChartCard>
 
-          <ChartCard title="Revenue by client" subtitle="Paid invoices">
+          <ChartCard title="Revenue by client" subtitle="Collected, YTD">
             {clientData.length === 0 ? <ChartEmpty /> : (
-              <ResponsiveContainer width="100%" height={260}>
-                <PieChart>
-                  <Pie data={clientData} dataKey="amount" nameKey="client" cx="50%" cy="50%" outerRadius={90} innerRadius={45} paddingAngle={2}>
-                    {clientData.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
-                  </Pie>
-                  <Tooltip formatter={(v: number) => fmt(Number(v), cur)} contentStyle={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 }} />
-                  <Legend wrapperStyle={{ fontSize: 11 }} />
-                </PieChart>
-              </ResponsiveContainer>
+              <div className="relative">
+                <ResponsiveContainer width="100%" height={260}>
+                  <PieChart>
+                    <Pie data={clientData} dataKey="amount" nameKey="client" cx="50%" cy="50%" outerRadius={90} innerRadius={56} paddingAngle={2}>
+                      {clientData.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
+                    </Pie>
+                    <Tooltip formatter={(v: number) => fmt(Number(v), cur)} contentStyle={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 }} />
+                    <Legend wrapperStyle={{ fontSize: 11 }} />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="absolute inset-x-0 top-[92px] flex flex-col items-center pointer-events-none">
+                  <span className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground">Total</span>
+                  <span className="font-display text-lg font-semibold tabular-nums">{fmtCompact(clientData.reduce((s, c) => s + c.amount, 0), cur)}</span>
+                </div>
+              </div>
             )}
           </ChartCard>
         </section>
@@ -193,10 +200,13 @@ function DashboardPage() {
               )}
             </ChartCard>
             <div className="bg-card ring-1 ring-border rounded-xl p-6 space-y-4">
-              <h3 className="text-sm font-medium">Firm snapshot</h3>
+              <h3 className="font-display text-sm font-semibold">Firm snapshot</h3>
               <Row label="Active clients"><Users className="size-3.5 text-muted-foreground" />{data?.clientCount ?? 0}</Row>
               <Row label="Open matters"><Briefcase className="size-3.5 text-muted-foreground" />{data?.openMatters ?? 0}</Row>
               <Row label="Overdue invoices"><AlertCircle className="size-3.5 text-destructive" />{data?.overdueCount ?? 0}</Row>
+              <div className="pt-2 border-t border-border">
+                <Gauge value={data?.collectionRate ?? 0} label="Collection rate" />
+              </div>
             </div>
           </aside>
         </section>
@@ -216,10 +226,34 @@ function ChartCard({ title, subtitle, children, compact }: { title: string; subt
   return (
     <div className={"bg-card ring-1 ring-border rounded-xl " + (compact ? "p-5" : "p-6")}>
       <div className="mb-4">
-        <h3 className="text-sm font-medium">{title}</h3>
-        {subtitle && <p className="text-[11px] text-muted-foreground uppercase tracking-widest mt-0.5">{subtitle}</p>}
+        <h3 className="font-display text-sm font-semibold">{title}</h3>
+        {subtitle && <p className="text-[10.5px] text-muted-foreground uppercase tracking-[0.12em] mt-0.5">{subtitle}</p>}
       </div>
       {children}
+    </div>
+  );
+}
+
+// Semicircular collection-rate gauge.
+function Gauge({ value, label }: { value: number; label: string }) {
+  const pct = Math.max(0, Math.min(100, value));
+  const data = [{ name: "filled", value: pct }, { name: "track", value: 100 - pct }];
+  return (
+    <div className="flex flex-col items-center">
+      <div className="relative w-full" style={{ height: 92 }}>
+        <ResponsiveContainer width="100%" height={150}>
+          <PieChart>
+            <Pie data={data} dataKey="value" startAngle={180} endAngle={0} cx="50%" cy="100%" innerRadius={52} outerRadius={72} stroke="none">
+              <Cell fill="var(--primary)" />
+              <Cell fill="var(--surface)" />
+            </Pie>
+          </PieChart>
+        </ResponsiveContainer>
+        <div className="absolute inset-x-0 bottom-0 flex flex-col items-center">
+          <span className="font-display text-2xl font-semibold tabular-nums">{pct}%</span>
+        </div>
+      </div>
+      <span className="text-[10.5px] uppercase tracking-[0.12em] text-muted-foreground">{label}</span>
     </div>
   );
 }
@@ -228,16 +262,17 @@ function ChartEmpty() {
   return <div className="h-[200px] flex items-center justify-center text-sm text-muted-foreground">No data yet.</div>;
 }
 
-function Kpi({ label, value, icon: Icon, loading, tone }: { label: string; value: string; icon: React.ComponentType<{ className?: string }>; loading?: boolean; tone?: "destructive" | "primary" }) {
+function Kpi({ label, value, icon: Icon, loading, tone, delta }: { label: string; value: string; icon: React.ComponentType<{ className?: string }>; loading?: boolean; tone?: "destructive" | "primary"; delta?: string }) {
   return (
-    <div className={"bg-card ring-1 rounded-xl p-5 space-y-4 " + (tone === "primary" ? "ring-primary/40" : "ring-border")}>
+    <div className={"bg-card ring-1 rounded-xl p-[22px] space-y-3 " + (tone === "primary" ? "ring-primary/40" : "ring-border")}>
       <div className="flex items-start justify-between">
-        <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-widest">{label}</p>
+        <p className="text-[10.5px] text-muted-foreground font-semibold uppercase tracking-[0.12em]">{label}</p>
         <Icon className={"size-4 " + (tone === "primary" ? "text-primary" : "text-muted-foreground")} />
       </div>
-      <h3 className={"text-2xl font-semibold tracking-tight " + (tone === "destructive" ? "text-destructive" : tone === "primary" ? "text-primary" : "")}>
+      <h3 className={"font-display text-[26px] leading-none font-semibold tracking-tight tabular-nums " + (tone === "destructive" ? "text-destructive" : tone === "primary" ? "text-primary" : "")}>
         {loading ? "—" : value}
       </h3>
+      {delta && <p className="text-[11px] font-medium text-success flex items-center gap-1"><ArrowUp className="size-3" />{delta}</p>}
     </div>
   );
 }

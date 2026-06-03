@@ -1,6 +1,7 @@
 import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
 import { ThemeProvider } from "@/lib/theme";
 import { BusinessProvider } from "@/lib/business";
+import { TimerProvider } from "@/lib/timer";
 import { AppSidebar } from "@/components/app/app-sidebar";
 import { supabase } from "@/integrations/supabase/client";
 import { AuthProvider } from "@/lib/auth";
@@ -21,12 +22,14 @@ function AppLayout() {
     <ThemeProvider>
       <AuthProvider>
         <BusinessProvider>
-          <div className="flex min-h-screen w-full bg-background text-foreground">
-            <AppSidebar />
-            <main className="flex-1 min-w-0 overflow-y-auto">
-              <Outlet />
-            </main>
-          </div>
+          <TimerProvider>
+            <div className="flex min-h-screen w-full bg-background text-foreground">
+              <AppSidebar />
+              <main className="flex-1 min-w-0 overflow-y-auto">
+                <Outlet />
+              </main>
+            </div>
+          </TimerProvider>
         </BusinessProvider>
       </AuthProvider>
     </ThemeProvider>
