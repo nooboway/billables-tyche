@@ -218,7 +218,7 @@ function KPI({ label, value, active, onClick, tone }: { label: string; value: st
   return (
     <button onClick={onClick} className={cn("text-left bg-card ring-1 rounded-xl p-[18px] hover:bg-surface transition", active ? "ring-[1.5px] ring-primary" : "ring-border")}>
       <p className="text-[10.5px] text-muted-foreground font-semibold uppercase tracking-[0.12em]">{label}</p>
-      <h3 className={cn("font-display text-[26px] leading-none font-semibold mt-3 tabular-nums truncate", tone === "destructive" && "text-destructive")}>{value}</h3>
+      <h3 className={cn("font-display text-xl xl:text-[22px] leading-none font-semibold mt-3 tabular-nums truncate", tone === "destructive" && "text-destructive")}>{value}</h3>
     </button>
   );
 }

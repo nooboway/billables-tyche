@@ -102,7 +102,7 @@ function DashboardPage() {
           <QA to="/clients" icon={UserPlus} label="Add client" />
         </section>
 
-        <section className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+        <section className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
           <Kpi label="ARR (run-rate)" value={fmtCompact(data?.arr ?? 0, cur)} icon={TrendingUp} loading={isLoading} tone="primary"
             delta={data?.arrDeltaPct != null ? `${data.arrDeltaPct > 0 ? "+" : ""}${data.arrDeltaPct}% vs prior 90d` : undefined}
             deltaUp={(data?.arrDeltaPct ?? 0) >= 0} />
@@ -270,7 +270,7 @@ function Kpi({ label, value, icon: Icon, loading, tone, delta, deltaUp = true }:
         <p className="text-[10.5px] text-muted-foreground font-semibold uppercase tracking-[0.12em]">{label}</p>
         <Icon className={"size-4 shrink-0 " + (tone === "primary" ? "text-primary" : "text-muted-foreground")} />
       </div>
-      <h3 className={"font-display text-[26px] leading-none font-semibold tracking-tight tabular-nums truncate " + (tone === "destructive" ? "text-destructive" : tone === "primary" ? "text-primary" : "")}>
+      <h3 className={"font-display text-xl xl:text-[22px] leading-none font-semibold tracking-tight tabular-nums truncate " + (tone === "destructive" ? "text-destructive" : tone === "primary" ? "text-primary" : "")}>
         {loading ? "—" : value}
       </h3>
       {delta && (
