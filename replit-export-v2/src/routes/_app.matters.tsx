@@ -105,7 +105,7 @@ function MattersPage() {
   return (
     <>
       <AppTopbar title="Matters" />
-      <div className="p-8 max-w-7xl mx-auto space-y-6">
+      <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
         <div className="flex items-center gap-3">
           <div className="relative flex-1">
             <Search className="size-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -124,8 +124,8 @@ function MattersPage() {
             <Briefcase className="size-7 mx-auto mb-3 opacity-50" />No matters yet.
           </div>
         ) : layout === "table" ? (
-          <div className="bg-card ring-1 ring-border rounded-xl overflow-hidden">
-            <table className="w-full text-left text-sm">
+          <div className="bg-card ring-1 ring-border rounded-xl overflow-x-auto">
+            <table className="w-full min-w-[820px] text-left text-sm">
               <thead className="bg-surface border-b border-border">
                 <tr><Th>Matter</Th><Th>Client</Th><Th>Practice area</Th><Th>Lead</Th><Th right>Rate</Th><Th>Status</Th><Th /></tr>
               </thead>

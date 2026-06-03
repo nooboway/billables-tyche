@@ -79,7 +79,7 @@ function TimePage() {
   return (
     <>
       <AppTopbar title="Time tracking" />
-      <div className="p-8 max-w-7xl mx-auto space-y-6">
+      <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
         <section className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <StatCard label="Unbilled value" value={fmt(unbilled)} />
           <StatCard label="Hours logged" value={`${totalHours.toFixed(1)}h`} />
@@ -112,8 +112,8 @@ function TimePage() {
         </div>
         {matters.length === 0 && <p className="text-xs text-muted-foreground">Create a matter first.</p>}
 
-        <div className="bg-card ring-1 ring-border rounded-xl overflow-hidden">
-          <table className="w-full text-left text-sm">
+        <div className="bg-card ring-1 ring-border rounded-xl overflow-x-auto">
+          <table className="w-full min-w-[760px] text-left text-sm">
             <thead className="bg-surface border-b border-border">
               <tr><Th>Date</Th><Th>Matter</Th><Th>Description</Th><Th>By</Th><Th right>Hours</Th><Th right>Amount</Th><Th>Status</Th><Th /></tr>
             </thead>

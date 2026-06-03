@@ -115,7 +115,7 @@ function ReportsPage() {
   return (
     <>
       <AppTopbar title="Reports" />
-      <div className="p-8 max-w-7xl mx-auto space-y-6">
+      <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <KPI label="WIP (unbilled)" value={fmtCompact(data?.totals.wip ?? 0, cur)} active={tab === "wip"} onClick={() => setTab("wip")} />
           <KPI label="Outstanding A/R" value={fmtCompact(data?.totals.outstanding ?? 0, cur)} active={tab === "outstanding"} onClick={() => setTab("outstanding")} />
@@ -232,12 +232,14 @@ function Aging({ label, v, tone }: { label: string; v: string; tone?: "destructi
 }
 function Table({ headers, children }: { headers: string[]; children: React.ReactNode }) {
   return (
-    <table className="w-full text-left text-sm">
+    <div className="overflow-x-auto">
+    <table className="w-full min-w-[640px] text-left text-sm">
       <thead className="bg-surface border-b border-border">
         <tr>{headers.map((h) => <th key={h} className="px-5 py-3 font-medium text-muted-foreground text-[11px] uppercase tracking-wider">{h}</th>)}</tr>
       </thead>
       <tbody className="divide-y divide-border">{children}</tbody>
     </table>
+    </div>
   );
 }
 function Td({ children, muted, num, strong, mono, className }: { children: React.ReactNode; muted?: boolean; num?: boolean; strong?: boolean; mono?: boolean; className?: string }) {

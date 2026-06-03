@@ -89,7 +89,7 @@ function DashboardPage() {
   return (
     <>
       <AppTopbar title="Dashboard" />
-      <div className="p-8 max-w-7xl mx-auto space-y-8">
+      <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-8">
         <div>
           <h2 className="font-display text-[23px] font-semibold tracking-tight">Welcome back to {current.name}</h2>
           <p className="text-sm text-muted-foreground mt-1">A snapshot of your firm's billing, matters, and unbilled work.</p>
@@ -157,8 +157,8 @@ function DashboardPage() {
               <h2 className="text-base font-medium">Recent invoices</h2>
               <Link to="/invoices" className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground hover:text-foreground">View all</Link>
             </div>
-            <div className="bg-card ring-1 ring-border rounded-xl overflow-hidden">
-              <table className="w-full text-left text-sm">
+            <div className="bg-card ring-1 ring-border rounded-xl overflow-x-auto">
+              <table className="w-full min-w-[560px] text-left text-sm">
                 <thead className="bg-surface border-b border-border">
                   <tr>
                     <th className="px-6 py-3 font-medium text-muted-foreground text-[11px] uppercase tracking-wider">Invoice</th>

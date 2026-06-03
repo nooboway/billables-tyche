@@ -160,7 +160,7 @@ function InvoicesPage() {
   return (
     <>
       <AppTopbar title="Invoices" />
-      <div className="p-8 max-w-7xl mx-auto space-y-6">
+      <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
         <div className="flex flex-col md:flex-row md:items-center gap-3">
           <div className="flex items-center gap-1 p-1 rounded-lg ring-1 ring-border bg-card overflow-x-auto">
             {filters.map((f) => (
@@ -181,8 +181,8 @@ function InvoicesPage() {
         {visible.length === 0 ? (
           <div className="bg-card ring-1 ring-border rounded-xl px-5 py-16 text-center text-sm text-muted-foreground"><FileText className="size-7 mx-auto mb-3 opacity-50" />No invoices.</div>
         ) : layout === "table" ? (
-          <div className="bg-card ring-1 ring-border rounded-xl overflow-hidden">
-            <table className="w-full text-left text-sm">
+          <div className="bg-card ring-1 ring-border rounded-xl overflow-x-auto">
+            <table className="w-full min-w-[820px] text-left text-sm">
               <thead className="bg-surface border-b border-border">
                 <tr><Th>Invoice</Th><Th>Client</Th><Th className="hidden md:table-cell">Matter</Th><Th>Issued</Th><Th>Due</Th><Th className="text-right">Amount</Th><Th>Status</Th><Th /></tr>
               </thead>
