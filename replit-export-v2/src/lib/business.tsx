@@ -28,6 +28,7 @@ type Ctx = {
   addBusiness: (name: string) => Promise<void>;
   refetch: () => void;
   loading: boolean;
+  error: Error | null;
 };
 
 const BusinessContext = createContext<Ctx | null>(null);
@@ -37,9 +38,11 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
   const fetchBiz = useServerFn(listBusinesses);
   const createFn = useServerFn(createBusiness);
   const qc = useQueryClient();
-  const { data, isLoading, refetch } = useQuery({
+  const { data, isLoading, refetch, error } = useQuery({
     queryKey: ["businesses"],
     queryFn: () => fetchBiz(),
+    retry: 2,
+    staleTime: 60_000,
   });
 
   const businesses: Business[] = useMemo(
@@ -77,7 +80,7 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <BusinessContext.Provider value={{ businesses, current, setCurrentId, addBusiness, refetch, loading: isLoading }}>
+    <BusinessContext.Provider value={{ businesses, current, setCurrentId, addBusiness, refetch, loading: isLoading, error: (error as Error) ?? null }}>
       {children}
     </BusinessContext.Provider>
   );

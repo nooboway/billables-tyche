@@ -23,6 +23,10 @@ function createSupabaseClient() {
       storage: typeof window !== 'undefined' ? localStorage : undefined,
       persistSession: true,
       autoRefreshToken: true,
+      // iOS Safari can hang on the Web Locks API (navigator.locks) that supabase-js
+      // uses by default, which froze the app on "Loading workspace…". This pass-through
+      // lock disables that path — token reads/refreshes run directly without a lock.
+      lock: async (_name: string, _acquireTimeout: number, fn: () => Promise<unknown>) => fn(),
     }
   });
 }

@@ -16,7 +16,17 @@ function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
   const seedFn = useServerFn(seedDemoAccount);
+
+  // Turn Supabase's terse auth errors into clear, human messages.
+  function friendlyAuthError(message: string): string {
+    const m = message.toLowerCase();
+    if (m.includes("invalid login credentials")) return "Incorrect email or password. Please try again.";
+    if (m.includes("email not confirmed")) return "Please confirm your email address before signing in.";
+    if (m.includes("rate limit") || m.includes("too many")) return "Too many attempts. Please wait a moment and try again.";
+    return message;
+  }
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -31,9 +41,14 @@ function LoginPage() {
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setBusy(true);
+    setFormError(null);
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     setBusy(false);
-    if (error) toast.error(error.message);
+    if (error) {
+      const msg = friendlyAuthError(error.message);
+      setFormError(msg);
+      toast.error(msg);
+    }
   };
 
   const google = async () => {
@@ -47,7 +62,7 @@ function LoginPage() {
       const creds = await seedFn() as { email: string; password: string };
       const { error } = await supabase.auth.signInWithPassword(creds);
       if (error) throw error;
-      toast.success("Signed in as managing partner");
+      toast.success("Signed in as Chief Olúmidé Adégoké, SAN — Tyche Solicitors");
     } catch (e) {
       toast.error((e as Error).message);
     } finally { setBusy(false); }
@@ -68,12 +83,15 @@ function LoginPage() {
           Try as Managing Partner (demo)
         </Button>
         <p className="text-[10px] text-center text-muted-foreground">
-          Demo seeds a Nigerian law firm with sample clients, matters, time, and invoices.
+          Explore Tyche Solicitors — a Lagos commercial firm with real clients, matters, time, and invoices.
         </p>
         <div className="text-center text-xs text-muted-foreground">or sign in with email</div>
         <form onSubmit={onSubmit} className="space-y-3">
-          <div className="space-y-1"><Label>Email</Label><Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required /></div>
-          <div className="space-y-1"><Label>Password</Label><Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required /></div>
+          <div className="space-y-1"><Label>Email</Label><Input type="email" value={email} onChange={(e) => { setEmail(e.target.value); setFormError(null); }} required /></div>
+          <div className="space-y-1"><Label>Password</Label><Input type="password" value={password} onChange={(e) => { setPassword(e.target.value); setFormError(null); }} required /></div>
+          {formError && (
+            <p className="text-xs text-destructive flex items-center gap-1.5" role="alert">{formError}</p>
+          )}
           <Button disabled={busy} type="submit" className="w-full">{busy ? "Signing in…" : "Sign in"}</Button>
         </form>
         <p className="text-center text-sm text-muted-foreground">
