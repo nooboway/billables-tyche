@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { FileText, AlertCircle, Clock, Wallet, Plus, Briefcase, UserPlus, Users, TrendingUp, ArrowUp } from "lucide-react";
+import { FileText, AlertCircle, Clock, Wallet, Plus, Briefcase, UserPlus, Users, TrendingUp, ArrowUp, ArrowDown } from "lucide-react";
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid,
   PieChart, Pie, Cell, Legend,
@@ -102,13 +102,14 @@ function DashboardPage() {
           <QA to="/clients" icon={UserPlus} label="Add client" />
         </section>
 
-        <section className="grid grid-cols-2 lg:grid-cols-5 gap-6">
-          <Kpi label="ARR (run-rate)" value={fmt(data?.arr ?? 0, cur)} icon={TrendingUp} loading={isLoading} tone="primary"
-            delta={data?.arrDeltaPct != null ? `${data.arrDeltaPct > 0 ? "+" : ""}${data.arrDeltaPct}% vs prior 90d` : undefined} />
-          <Kpi label="Revenue (collected)" value={fmt(data?.revenue ?? 0, cur)} icon={Wallet} loading={isLoading} />
-          <Kpi label="Outstanding A/R" value={fmt(data?.outstanding ?? 0, cur)} icon={FileText} loading={isLoading} />
+        <section className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+          <Kpi label="ARR (run-rate)" value={fmtCompact(data?.arr ?? 0, cur)} icon={TrendingUp} loading={isLoading} tone="primary"
+            delta={data?.arrDeltaPct != null ? `${data.arrDeltaPct > 0 ? "+" : ""}${data.arrDeltaPct}% vs prior 90d` : undefined}
+            deltaUp={(data?.arrDeltaPct ?? 0) >= 0} />
+          <Kpi label="Revenue (collected)" value={fmtCompact(data?.revenue ?? 0, cur)} icon={Wallet} loading={isLoading} />
+          <Kpi label="Outstanding A/R" value={fmtCompact(data?.outstanding ?? 0, cur)} icon={FileText} loading={isLoading} />
           <Kpi label="Overdue" value={String(data?.overdueCount ?? 0)} icon={AlertCircle} loading={isLoading} tone="destructive" />
-          <Kpi label="Unbilled time" value={fmt(data?.unbilledTime ?? 0, cur)} icon={Clock} loading={isLoading} />
+          <Kpi label="Unbilled time" value={fmtCompact(data?.unbilledTime ?? 0, cur)} icon={Clock} loading={isLoading} />
         </section>
 
         {/* Charts */}
@@ -262,17 +263,21 @@ function ChartEmpty() {
   return <div className="h-[200px] flex items-center justify-center text-sm text-muted-foreground">No data yet.</div>;
 }
 
-function Kpi({ label, value, icon: Icon, loading, tone, delta }: { label: string; value: string; icon: React.ComponentType<{ className?: string }>; loading?: boolean; tone?: "destructive" | "primary"; delta?: string }) {
+function Kpi({ label, value, icon: Icon, loading, tone, delta, deltaUp = true }: { label: string; value: string; icon: React.ComponentType<{ className?: string }>; loading?: boolean; tone?: "destructive" | "primary"; delta?: string; deltaUp?: boolean }) {
   return (
-    <div className={"bg-card ring-1 rounded-xl p-[22px] space-y-3 " + (tone === "primary" ? "ring-primary/40" : "ring-border")}>
-      <div className="flex items-start justify-between">
+    <div className={"bg-card ring-1 rounded-xl p-[18px] space-y-3 min-w-0 " + (tone === "primary" ? "ring-primary/40" : "ring-border")}>
+      <div className="flex items-start justify-between gap-2">
         <p className="text-[10.5px] text-muted-foreground font-semibold uppercase tracking-[0.12em]">{label}</p>
-        <Icon className={"size-4 " + (tone === "primary" ? "text-primary" : "text-muted-foreground")} />
+        <Icon className={"size-4 shrink-0 " + (tone === "primary" ? "text-primary" : "text-muted-foreground")} />
       </div>
-      <h3 className={"font-display text-[26px] leading-none font-semibold tracking-tight tabular-nums " + (tone === "destructive" ? "text-destructive" : tone === "primary" ? "text-primary" : "")}>
+      <h3 className={"font-display text-[26px] leading-none font-semibold tracking-tight tabular-nums truncate " + (tone === "destructive" ? "text-destructive" : tone === "primary" ? "text-primary" : "")}>
         {loading ? "—" : value}
       </h3>
-      {delta && <p className="text-[11px] font-medium text-success flex items-center gap-1"><ArrowUp className="size-3" />{delta}</p>}
+      {delta && (
+        <p className={"text-[11px] font-medium flex items-center gap-1 " + (deltaUp ? "text-success" : "text-destructive")}>
+          {deltaUp ? <ArrowUp className="size-3" /> : <ArrowDown className="size-3" />}{delta}
+        </p>
+      )}
     </div>
   );
 }
