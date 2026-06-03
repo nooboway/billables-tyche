@@ -11,6 +11,10 @@
     "build:backend": "npm run build --workspace=apps/backend",
     "dev:replit": "npm run --prefix replit-export-v2 dev",
     "build:replit": "npm run --prefix replit-export-v2 build",
-    "build": "npm run build:replit && node build-backend-vercel.js"
+    "install:replit": "npm --prefix replit-export-v2 install --include=dev",
+    "build": "npm run install:replit && npm run build:replit && node build-backend-vercel.js"
+  },
+  "devDependencies": {
+    "esbuild": "^0.24.0"
   }
 }
