@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: billables-tyche-web
+    runtime: node
+    plan: free
+    region: frankfurt
+    # Build only the web app (TanStack Start) as a standalone Node server (nitro node-server).
+    # --include=dev so vite/build tooling installs even if NODE_ENV=production.
+    buildCommand: npm --prefix replit-export-v2 install --include=dev && npm --prefix replit-export-v2 run build
+    startCommand: node replit-export-v2/dist/server/index.mjs
+    healthCheckPath: /
+    envVars:
+      - key: NITRO_PRESET
+        value: node-server
+      # Supabase URL + publishable (anon) key are public by design (shipped in the client bundle).
+      - key: VITE_SUPABASE_URL
+        value: https://jrhyeqgxgbxzyvwrvoji.supabase.co
+      - key: VITE_SUPABASE_PUBLISHABLE_KEY
+        value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpyaHllcWd4Z2J4enl2d3J2b2ppIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA0MTczNTgsImV4cCI6MjA5NTk5MzM1OH0.zX4_SAlVgI5PH88UoIZrmBKUPMu1-yOYe-UbO-1tGjY
+      - key: SUPABASE_URL
+        value: https://jrhyeqgxgbxzyvwrvoji.supabase.co
+      - key: SUPABASE_PUBLISHABLE_KEY
+        value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpyaHllcWd4Z2J4enl2d3J2b2ppIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA0MTczNTgsImV4cCI6MjA5NTk5MzM1OH0.zX4_SAlVgI5PH88UoIZrmBKUPMu1-yOYe-UbO-1tGjY
+      # Service-role key is a real secret — set in the Render dashboard (sync: false).
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false

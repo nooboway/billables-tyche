@@ -13,6 +13,7 @@ export default defineConfig({
     server: { entry: "server" },
   },
   nitro: {
-    preset: "vercel",
+    // Vercel by default; set NITRO_PRESET=node-server for a standalone Node server (Render, etc.)
+    preset: process.env.NITRO_PRESET || "vercel",
   },
 });
