@@ -13,3 +13,7 @@ apps/backend/generated/
 
 .vercel
 .workspace/
+
+# Lazyweb Cursor MCP config holds a bearer token — never commit
+.cursor/mcp.json
+

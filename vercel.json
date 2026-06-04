@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "comment": "This file is a fallback only. The real routing is assembled by build-backend-vercel.js into .vercel/output/config.json which takes precedence when present.",
+
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/index" },
     { "source": "/(.*)", "destination": "/replit-export-v2/dist/client/$1" }
