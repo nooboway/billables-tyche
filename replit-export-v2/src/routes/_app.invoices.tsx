@@ -20,13 +20,21 @@ import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_app/invoices")({
   head: () => ({ meta: [{ title: "Invoices — Billables" }] }),
+  validateSearch: (s: Record<string, unknown>): { status?: string } => ({
+    status: typeof s.status === "string" ? s.status : undefined,
+  }),
   component: InvoicesPage,
 });
 
 type Invoice = InvoiceLike & { id: string };
 type TE = { id: string; entry_date: string; minutes: number; rate: number; description: string | null; matter_id: string; matters?: { name: string; client_id: string } | null };
 
-const filters = ["All", "draft", "sent", "overdue", "paid"] as const;
+const filters = ["All", "outstanding", "draft", "sent", "overdue", "paid"] as const;
+type Filter = (typeof filters)[number];
+function filterFromSearch(status?: string): Filter {
+  const s = (status ?? "").toLowerCase();
+  return (filters as readonly string[]).includes(s) ? (s as Filter) : "All";
+}
 
 function statusLabel(s: string): "Paid" | "Pending" | "Overdue" | "Draft" {
   if (s === "paid") return "Paid";
@@ -45,7 +53,9 @@ function InvoicesPage() {
   const delFn = useServerFn(deleteInvoice);
   const statusFn = useServerFn(updateInvoiceStatus);
   const qc = useQueryClient();
-  const [filter, setFilter] = useState<(typeof filters)[number]>("All");
+  const { status: statusParam } = Route.useSearch();
+  const [filter, setFilter] = useState<Filter>(() => filterFromSearch(statusParam));
+  useEffect(() => { setFilter(filterFromSearch(statusParam)); }, [statusParam]);
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
   const [layout, setLayout] = useState<"table" | "cards">("cards");
@@ -140,7 +150,9 @@ function InvoicesPage() {
   });
 
   const visible = useMemo(() => rows.filter((i) => {
-    const fOk = filter === "All" || i.status === filter;
+    const fOk = filter === "All" ? true
+      : filter === "outstanding" ? (i.status === "sent" || i.status === "overdue")
+      : i.status === filter;
     const qOk = !q || (i.number + (i.clients?.name ?? "")).toLowerCase().includes(q.toLowerCase());
     return fOk && qOk;
   }), [rows, filter, q]);

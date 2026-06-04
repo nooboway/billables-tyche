@@ -169,3 +169,104 @@
     -webkit-font-smoothing: antialiased;
   }
 }
+
+/* ── Horizontal KPI scroll track ── */
+.kpi-scroll {
+  display: flex;
+  gap: 1rem;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  padding-bottom: 4px;
+}
+.kpi-scroll::-webkit-scrollbar {
+  display: none;
+}
+.kpi-scroll > * {
+  scroll-snap-align: start;
+  flex: 0 0 auto;
+}
+
+/* ── Interactive card hover ── */
+.card-interactive {
+  transition: transform 0.3s cubic-bezier(0, 0, 0.2, 1),
+              box-shadow 0.3s cubic-bezier(0, 0, 0.2, 1),
+              background-color 0.3s cubic-bezier(0, 0, 0.2, 1),
+              border-color 0.3s cubic-bezier(0, 0, 0.2, 1);
+}
+.card-interactive:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    0 8px 25px -5px oklch(0.5 0.2 278 / 12%),
+    0 0 0 1px oklch(0.5 0.2 278 / 25%);
+}
+
+.dark .card-interactive:hover {
+  box-shadow:
+    0 8px 30px -5px oklch(0.66 0.19 278 / 18%),
+    0 0 0 1px oklch(0.66 0.19 278 / 30%);
+}
+
+/* ── Scroll fade masks ── */
+.kpi-scroll-wrapper {
+  position: relative;
+}
+.kpi-scroll-wrapper::before,
+.kpi-scroll-wrapper::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 4px;
+  width: 2rem;
+  pointer-events: none;
+  z-index: 1;
+}
+.kpi-scroll-wrapper::before {
+  left: 0;
+  background: linear-gradient(to right, var(--background), transparent);
+  opacity: 0;
+}
+.kpi-scroll-wrapper::after {
+  right: 0;
+  background: linear-gradient(to left, var(--background), transparent);
+}
+
+/* ── Eyebrow label ── */
+.eyebrow {
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--muted-foreground);
+}
+
+/* ── Hover arrow (slide + fade in from the left, ~150ms) ── */
+.card-arrow {
+  opacity: 0;
+  transform: translateX(-4px);
+  transition: opacity 150ms ease-out, transform 150ms ease-out, color 150ms ease-out;
+}
+.group:hover .card-arrow,
+.group:focus-visible .card-arrow {
+  opacity: 1;
+  transform: translateX(0);
+  color: var(--primary);
+}
+
+/* ── Respect reduced motion: final state, no movement ── */
+@media (prefers-reduced-motion: reduce) {
+  .card-interactive,
+  .card-arrow,
+  * {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+  .card-interactive:hover {
+    transform: none !important;
+  }
+  .group:hover .card-arrow {
+    opacity: 1;
+    transform: none;
+  }
+}

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { Plus, Clock, Trash2, Play, Square } from "lucide-react";
@@ -20,6 +20,9 @@ import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_app/time")({
   head: () => ({ meta: [{ title: "Time tracking — Billables" }] }),
+  validateSearch: (s: Record<string, unknown>): { filter?: string } => ({
+    filter: s.filter === "unbilled" ? "unbilled" : undefined,
+  }),
   component: TimePage,
 });
 
@@ -40,6 +43,7 @@ function TimePage() {
   const upFn = useServerFn(upsertTimeEntry);
   const delFn = useServerFn(deleteTimeEntry);
   const qc = useQueryClient();
+  const { filter: timeFilter } = Route.useSearch();
   const [open, setOpen] = useState(false);
   const today = new Date().toISOString().slice(0, 10);
   const [form, setForm] = useState({ matter_id: "", entry_date: today, hours: "1.0", description: "", billable: true, rate: "350" });
@@ -75,6 +79,7 @@ function TimePage() {
   const fmt = (n: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: cur, maximumFractionDigits: 0 }).format(n);
   const unbilled = entries.filter((e) => e.billable && !e.invoice_id).reduce((s, e) => s + (e.minutes / 60) * Number(e.rate), 0);
   const totalHours = entries.reduce((s, e) => s + e.minutes, 0) / 60;
+  const shownEntries = timeFilter === "unbilled" ? entries.filter((e) => e.billable && !e.invoice_id) : entries;
 
   return (
     <>
@@ -107,7 +112,14 @@ function TimePage() {
           </div>
         </section>
 
-        <div className="flex items-center justify-end">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            {timeFilter === "unbilled" && (
+              <Link to="/time" search={{}} className="inline-flex items-center gap-1.5 px-2.5 h-7 rounded-full text-xs font-medium bg-warning/10 text-warning border border-warning/30 hover:bg-warning/20">
+                <span className="size-1.5 rounded-full bg-current" />Unbilled only ✕
+              </Link>
+            )}
+          </div>
           <Button onClick={() => setOpen(true)} disabled={matters.length === 0} className="gap-1.5"><Plus className="size-4" />Log time manually</Button>
         </div>
         {matters.length === 0 && <p className="text-xs text-muted-foreground">Create a matter first.</p>}
@@ -118,7 +130,7 @@ function TimePage() {
               <tr><Th>Date</Th><Th>Matter</Th><Th>Description</Th><Th>By</Th><Th right>Hours</Th><Th right>Amount</Th><Th>Status</Th><Th /></tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {entries.map((e) => (
+              {shownEntries.map((e) => (
                 <tr key={e.id} className="hover:bg-surface/50 group">
                   <td className="px-5 py-[13px] text-xs text-muted-foreground font-mono">{e.entry_date}</td>
                   <td className="px-5 py-[13px]">
@@ -145,8 +157,8 @@ function TimePage() {
                   </td>
                 </tr>
               ))}
-              {entries.length === 0 && (
-                <tr><td colSpan={8} className="px-5 py-12 text-center text-sm text-muted-foreground"><Clock className="size-6 mx-auto mb-2 opacity-50" />No time logged yet.</td></tr>
+              {shownEntries.length === 0 && (
+                <tr><td colSpan={8} className="px-5 py-12 text-center text-sm text-muted-foreground"><Clock className="size-6 mx-auto mb-2 opacity-50" />{timeFilter === "unbilled" ? "No unbilled time entries." : "No time logged yet."}</td></tr>
               )}
             </tbody>
           </table>
